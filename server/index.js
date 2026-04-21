@@ -4,6 +4,11 @@ import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth, MessageMedia } = pkg;
 import qrcode from 'qrcode-terminal';
+import express from 'express';
+import http from 'http';
+
+const app_express = express();
+const server_http = http.createServer(app_express);
 
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
 import { processInventoryMessage } from './aiService.js';
@@ -13,6 +18,26 @@ const hasDB = initFirebase();
 if (!hasDB) {
   process.exit(1);
 }
+
+// Configuração de Pastas estáticas (Site)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.join(__dirname, '../dist');
+
+app_express.use(express.static(distPath));
+
+// Rota para o SPA (React)
+app_express.get('*', (req, res, next) => {
+  // Se for uma requisição de API ou algo do gênero, podemos ignorar, mas aqui servimos o index.html
+  if (req.url.startsWith('/api')) return next();
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+const PORT = process.env.PORT || 3001;
+server_http.listen(PORT, () => {
+  console.log(`🚀 Servidor Web rodando na porta ${PORT}`);
+  console.log(`🌐 Site disponível em: http://localhost:${PORT}`);
+});
 
 const client = new Client({
   authStrategy: new LocalAuth(),

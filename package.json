@@ -11,7 +11,7 @@
     "lint": "tsc --noEmit",
     "bot": "node server/index.js",
     "reset-bot": "powershell -Command \"Remove-Item -Path .wwebjs_auth, .wwebjs_cache -Recurse -Force -ErrorAction SilentlyContinue\"",
-    "start": "vite --port $PORT --host 0.0.0.0"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
