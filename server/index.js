@@ -97,9 +97,15 @@ client.on('qr', (qr) => {
 
 // Rota /qr removida daqui (movida para cima)
 
+// Iniciar robô com logs detalhados
+console.log('🤖 Tentando iniciar o motor do robô... (Isso pode levar até 1 minuto)');
+client.initialize().catch(err => {
+    console.error('💥 ERRO FATAL AO INICIAR ROBÔ:', err);
+});
+
 client.on('ready', () => {
-    lastQr = null; // Limpa o QR quando conecta
-    console.log('✅ Cliente do WhatsApp conectado e pronto para receber mensagens!');
+    lastQr = null; 
+    console.log('✅ Cliente do WhatsApp conectado!');
     
     // Iniciar ouvinte para disparar boas vindas
     console.log('👀 Ouvindo por novos cadastros...');
