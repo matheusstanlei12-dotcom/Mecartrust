@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "bot": "node server/index.js",
-    "reset-bot": "powershell -Command \"Remove-Item -Path .wwebjs_auth, .wwebjs_cache -Recurse -Force -ErrorAction SilentlyContinue\""
+    "reset-bot": "powershell -Command \"Remove-Item -Path .wwebjs_auth, .wwebjs_cache -Recurse -Force -ErrorAction SilentlyContinue\"",
+    "start": "vite --port $PORT --host 0.0.0.0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
