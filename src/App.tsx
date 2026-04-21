@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 import { initializeApp } from 'firebase/app';
 import { 
@@ -553,9 +553,9 @@ export default function App() {
     const details = finances.map(f => `${f.description}: R$ ${f.value.toFixed(2)} (${f.type})`).join(', ');
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Você é um consultor financeiro residencial especialista em economia doméstica. 
+      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const response = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: `Você é um consultor financeiro residencial especialista em economia doméstica. 
         Analise os gastos da residência atual para o mês presente.
         
         DADOS:
@@ -570,11 +570,12 @@ export default function App() {
         1. Resumo da situação.
         2. Top 3 áreas para redução de custos imediatos.
         3. Dicas específicas para economizar usando os preços dos supermercados BH, EPA e Apoio Mineiro.
-        4. Meta de economia sugerida.`,
-        config: { systemInstruction: "Seja prático e motivador." }
+        4. Meta de economia sugerida.` }]} ],
+        generationConfig: { systemInstruction: "Seja prático e motivador." } as any
       });
-      setAiReport(response.text);
+      setAiReport(response.response.text());
     } catch (e) {
+      console.error(e);
       setAiReport("Erro ao gerar análise I.A. Verifique sua conexão.");
     } finally {
       setIsGeneratingReport(false);
@@ -975,29 +976,30 @@ export default function App() {
   const analyzeItem = async (itemName: string, itemId: string, listName: string, baseList?: GroceryItem[]) => {
     if (!user || !selectedResidenceId) return;
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analise o item de mercado "${itemName}". 
-        Determine a categoria entre: ${DEFAULT_CATEGORIES.join(', ')}.
-        Estime o preço médio em Reais (BRL) para os seguintes supermercados reais de Belo Horizonte/MG: ${stores.map(s => s.name).join(', ')}.
-        Seja realista com os preços praticados nessas redes (BH, EPA, Apoio).
-        Retorne um JSON puro.`,
-        config: {
+      const model = ai.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
-              category: { type: Type.STRING },
+              category: { type: SchemaType.STRING },
               prices: {
-                type: Type.OBJECT,
-                properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: Type.NUMBER } }), {})
+                type: SchemaType.OBJECT,
+                properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: SchemaType.NUMBER } }), {})
               }
             }
           }
         }
       });
 
-      const data = JSON.parse(response.text || '{}');
+      const response = await model.generateContent(`Analise o item de mercado "${itemName}". 
+        Determine a categoria entre: ${DEFAULT_CATEGORIES.join(', ')}.
+        Estime o preço médio em Reais (BRL) para os seguintes supermercados reais de Belo Horizonte/MG: ${stores.map(s => s.name).join(', ')}.
+        Seja realista com os preços praticados nessas redes (BH, EPA, Apoio).
+        Retorne um JSON puro.`);
+
+      const data = JSON.parse(response.response.text() || '{}');
       
       // Use provided baseList or current state
       const currentListItems = baseList || lists[listName] || [];
@@ -1062,7 +1064,7 @@ export default function App() {
   };
 
   // Initialize Gemini
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' }), []);
+  const ai = useMemo(() => new GoogleGenerativeAI(process.env.GEMINI_API_KEY || ''), []);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -1089,23 +1091,21 @@ export default function App() {
         locationQuery = `latitude: ${lat}, longitude: ${lon}`;
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Encontre os nomes de 3 supermercados reais e grandes próximos a esta localização: ${locationQuery}. Se não encontrar uma localização exata, use a capital mais próxima no Brasil. 
-        Retorne um JSON com a propriedade "city" (nome da cidade) e "stores" (array de objetos com "name" e "icon" que deve ser um emoji de mercado).`,
-        config: {
+      const model = ai.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
-              city: { type: Type.STRING },
+              city: { type: SchemaType.STRING },
               stores: {
-                type: Type.ARRAY,
+                type: SchemaType.ARRAY,
                 items: {
-                  type: Type.OBJECT,
+                  type: SchemaType.OBJECT,
                   properties: {
-                    name: { type: Type.STRING },
-                    icon: { type: Type.STRING }
+                    name: { type: SchemaType.STRING },
+                    icon: { type: SchemaType.STRING }
                   }
                 }
               }
@@ -1114,7 +1114,10 @@ export default function App() {
         }
       });
 
-      const data = JSON.parse(response.text || '{}');
+      const response = await model.generateContent(`Encontre os nomes de 3 supermercados reais e grandes próximos a esta localização: ${locationQuery}. Se não encontrar uma localização exata, use a capital mais próxima no Brasil. 
+        Retorne um JSON com a propriedade "city" (nome da cidade) e "stores" (array de objetos com "name" e "icon" que deve ser um emoji de mercado).`);
+
+      const data = JSON.parse(response.response.text() || '{}');
       if (data.stores && data.stores.length > 0) {
         setStores(data.stores);
         setSelectedStore(data.stores[0].name);
@@ -1122,6 +1125,9 @@ export default function App() {
       }
     } catch (error) {
       console.error("Erro ao buscar supermercados locais:", error);
+      // Fallback em caso de erro na API ou localização
+      setStores(STORES_INITIAL);
+      setLocationName("Belo Horizonte (Padrão)");
     } finally {
       setIsSearchingStores(false);
     }
@@ -1191,9 +1197,9 @@ export default function App() {
     alert("O Radar de Inteligência Artificial está cotando o preço total do seu carrinho nos maiores hipermercados mais perto de você agora!");
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Você é um avaliador de supermercados. Localização do usuário: ${locationName}. 
+      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const response = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: `Você é um avaliador de supermercados. Localização do usuário: ${locationName}. 
         Mercados atuais sendo analisados: ${stores.map(s => s.name).join(', ')}.
         Para a seguinte lista de produtos:
         ${items.map(i => `- ${i.quantity} ${i.unit} de ${i.name}`).join('\n')}
@@ -1210,11 +1216,11 @@ export default function App() {
                }
             }
           ]
-        }`,
-        config: { responseMimeType: "application/json" }
+        }` }] }],
+        generationConfig: { responseMimeType: "application/json" }
       });
 
-      const data = JSON.parse(response.text || '{}');
+      const data = JSON.parse(response.response.text() || '{}');
       if (data.items) {
         const updatedItems = items.map(item => {
           // Busca case insensitive
@@ -1231,7 +1237,7 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      alert("Houve um erro na nuvem ao cotar os supermercados locais.");
+      alert(`Erro na cotação: ${err instanceof Error ? err.message : 'Falha na conexão com a nuvem'}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -1269,45 +1275,34 @@ export default function App() {
             Retorne um JSON: { items: [{ name: string, price: number }] }.`
       };
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            text: promptMap[mode]
-          },
-          {
-            inlineData: {
-              mimeType: file.type,
-              data: base64Data
-            }
-          }
-        ],
-        config: {
+      const model = ai.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: mode === 'shopping' ? {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-              type: Type.OBJECT,
+              type: SchemaType.OBJECT,
               properties: {
-                name: { type: Type.STRING },
-                category: { type: Type.STRING },
+                name: { type: SchemaType.STRING },
+                category: { type: SchemaType.STRING },
                 prices: {
-                  type: Type.OBJECT,
-                  properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: Type.NUMBER } }), {})
+                  type: SchemaType.OBJECT,
+                  properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: SchemaType.NUMBER } }), {})
                 }
               }
             }
           } : {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
               items: {
-                type: Type.ARRAY,
+                type: SchemaType.ARRAY,
                 items: {
-                  type: Type.OBJECT,
+                  type: SchemaType.OBJECT,
                   properties: {
-                    name: { type: Type.STRING },
-                    quantity: { type: Type.NUMBER },
-                    price: { type: Type.NUMBER }
+                    name: { type: SchemaType.STRING },
+                    quantity: { type: SchemaType.NUMBER },
+                    price: { type: SchemaType.NUMBER }
                   }
                 }
               }
@@ -1316,7 +1311,19 @@ export default function App() {
         }
       });
 
-      const data = JSON.parse(response.text || (mode === 'shopping' ? '[]' : '{"items":[]}'));
+      const response = await model.generateContent([
+        {
+          text: promptMap[mode]
+        },
+        {
+          inlineData: {
+            mimeType: file.type,
+            data: base64Data
+          }
+        }
+      ]);
+
+      const data = JSON.parse(response.response.text() || (mode === 'shopping' ? '[]' : '{"items":[]}'));
 
       if (mode === 'shopping') {
         const processedItems: GroceryItem[] = data.map((raw: any) => ({
