@@ -158,4 +158,18 @@ client.on('message', async msg => {
   }
 });
 
+// Lógica de "Insônia" - Mantém o robô acordado 24/7
+const keepAwake = () => {
+    const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    setInterval(async () => {
+        try {
+            console.log(`⏰ [Keep-Awake] Cutucando servidor em: ${url}`);
+            await fetch(url);
+        } catch (err) {
+            console.error("❌ [Keep-Awake] Erro ao tentar se auto-cutucar:", err.message);
+        }
+    }, 10 * 60 * 1000); // A cada 10 minutos
+};
+
 client.initialize();
+keepAwake();
