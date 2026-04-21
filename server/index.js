@@ -26,9 +26,44 @@ const distPath = path.join(__dirname, '../dist');
 
 app_express.use(express.static(distPath));
 
+// Rota para ver o QR Code de forma limpa (Deve vir ANTES do wildcard *)
+app_express.get('/qr', (req, res) => {
+    if (!lastQr) {
+        return res.send(`
+            <html>
+                <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+                    <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
+                        <h2 style="color:#f39c12;margin-bottom:20px">Aguardando Robô...</h2>
+                        <p style="color:#666">O QR Code ainda não foi gerado pelo servidor.</p>
+                        <p style="color:#999;font-size:0.8rem">Esta página irá atualizar sozinha em 3 segundos.</p>
+                    </div>
+                    <script>setTimeout(() => location.reload(), 3000)</script>
+                </body>
+            </html>
+        `);
+    }
+    
+    res.send(`
+        <html>
+            <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
+                    <h2 style="color:#25d366;margin-bottom:20px">Conectar MercaTrust</h2>
+                    <div id="qrcode"></div>
+                    <p style="margin-top:20px;color:#666">Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
+                </div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+                <script>
+                    new QRCode(document.getElementById("qrcode"), "${lastQr}");
+                    setTimeout(() => location.reload(), 30000);
+                </script>
+            </body>
+        </html>
+    `);
+});
+
 // Rota para o SPA (React)
 app_express.get('*', (req, res, next) => {
-  // Se for uma requisição de API ou algo do gênero, podemos ignorar, mas aqui servimos o index.html
+  if (req.url === '/qr') return next(); // Força a rota /qr a ser ignorada aqui
   if (req.url.startsWith('/api')) return next();
   res.sendFile(path.join(distPath, 'index.html'));
 });
@@ -57,30 +92,7 @@ client.on('qr', (qr) => {
     console.log('Novo QR Code gerado! Acesse /qr para escanear.');
 });
 
-// Rota para ver o QR Code de forma limpa
-app_express.get('/qr', (req, res) => {
-    if (!lastQr) {
-        return res.send('<h1>QR Code ainda não gerado.</h1><p>Aguarde uns instantes e atualize a página.</p><script>setTimeout(() => location.reload(), 2000)</script>');
-    }
-    
-    res.send(`
-        <html>
-            <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
-                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
-                    <h2 style="color:#25d366;margin-bottom:20px">Conectar MercaTrust</h2>
-                    <div id="qrcode"></div>
-                    <p style="margin-top:20px;color:#666">Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
-                </div>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-                <script>
-                    new QRCode(document.getElementById("qrcode"), "${lastQr}");
-                    // Atualiza a cada 30 segundos para pegar um novo QR se expirar
-                    setTimeout(() => location.reload(), 30000);
-                </script>
-            </body>
-        </html>
-    `);
-});
+// Rota /qr removida daqui (movida para cima)
 
 client.on('ready', () => {
     lastQr = null; // Limpa o QR quando conecta
