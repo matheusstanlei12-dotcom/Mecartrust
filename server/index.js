@@ -50,13 +50,40 @@ const client = new Client({
   }
 });
 
-// Inicializado
+let lastQr = null;
+
 client.on('qr', (qr) => {
-  console.log('🤖 Escaneie este QR Code pelo WhatsApp do seu celular comercial para ativar o robô!');
-  qrcode.generate(qr, { small: true });
+    lastQr = qr;
+    console.log('Novo QR Code gerado! Acesse /qr para escanear.');
+});
+
+// Rota para ver o QR Code de forma limpa
+app_express.get('/qr', (req, res) => {
+    if (!lastQr) {
+        return res.send('<h1>QR Code ainda não gerado.</h1><p>Aguarde uns instantes e atualize a página.</p><script>setTimeout(() => location.reload(), 2000)</script>');
+    }
+    
+    res.send(`
+        <html>
+            <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
+                    <h2 style="color:#25d366;margin-bottom:20px">Conectar MercaTrust</h2>
+                    <div id="qrcode"></div>
+                    <p style="margin-top:20px;color:#666">Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
+                </div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+                <script>
+                    new QRCode(document.getElementById("qrcode"), "${lastQr}");
+                    // Atualiza a cada 30 segundos para pegar um novo QR se expirar
+                    setTimeout(() => location.reload(), 30000);
+                </script>
+            </body>
+        </html>
+    `);
 });
 
 client.on('ready', () => {
+    lastQr = null; // Limpa o QR quando conecta
     console.log('✅ Cliente do WhatsApp conectado e pronto para receber mensagens!');
     
     // Iniciar ouvinte para disparar boas vindas
