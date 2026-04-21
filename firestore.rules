@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} { allow read, write: if false; }
+
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isValidId(id) { return id is string && id.size() <= 128; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Check if user is a member of the residence
+    function isMemberOf(resId) {
+      return isSignedIn() && get(/databases/$(database)/documents/residences/$(resId)).data.members.hasAny([request.auth.uid]);
+    }
+
+    // Check if user is the resonance owner
+    function isResOwner(resId) {
+       return isSignedIn() && get(/databases/$(database)/documents/residences/$(resId)).data.ownerId == request.auth.uid;
+    }
+
+    // Admin check (cached profile)
+    function isAdmin() {
+      return isSignedIn() && 
+        (request.auth.token.email == 'thiago.orlandi1@gmail.com' ||
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && 
+                      incoming().keys().hasAll(['uid', 'email']) &&
+                      incoming().isAdmin == false &&
+                      incoming().isApproved == false;
+      allow update: if isAdmin() || (
+        isOwner(userId) && 
+        incoming().diff(existing()).affectedKeys().hasOnly(['email'])
+      );
+    }
+
+    // --- Residences Collection ---
+    match /residences/{resId} {
+      allow get: if (isSignedIn() && request.auth.uid in existing().members) || isAdmin();
+      allow list: if isSignedIn() && (resource.data.members.hasAny([request.auth.uid]) || isAdmin());
+      
+      allow create: if isSignedIn() && 
+                      incoming().ownerId == request.auth.uid &&
+                      incoming().members.size() == 1 &&
+                      incoming().members[0] == request.auth.uid;
+      
+      allow update: if isAdmin() || (
+        isResOwner(resId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'members', 'inviteCode'])
+      );
+      
+      allow delete: if isAdmin() || isResOwner(resId);
+
+      // Access Requests
+      match /accessRequests/{reqId} {
+        allow read: if isResOwner(resId) || isAdmin();
+        allow create: if isSignedIn() && 
+                        incoming().requestingUserId == request.auth.uid &&
+                        incoming().status == 'pending' &&
+                        incoming().timestamp == request.time;
+        allow update: if isResOwner(resId) || isAdmin();
+      }
+
+      // Sub-collections (Lists, Inventory, History, Tasks, etc.)
+      match /{allSubcollections=**} {
+        allow read, write: if isMemberOf(resId) || isAdmin();
+      }
+    }
+
+    // --- Logs (Security Audit) ---
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && 
+                      incoming().userId == request.auth.uid &&
+                      incoming().timestamp == request.time;
+    }
+
+    // --- Feedback ---
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && 
+                      incoming().userId == request.auth.uid &&
+                      incoming().rating >= 1 && incoming().rating <= 10 &&
+                      incoming().timestamp == request.time;
+    }
+  }
+}

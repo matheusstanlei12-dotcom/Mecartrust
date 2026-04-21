@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "isApproved": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "GroceryItem": {
+      "title": "Grocery Item",
+      "description": "An item in a shopping list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "category": { "type": "string" },
+        "prices": { "type": "object" },
+        "checked": { "type": "boolean" }
+      }
+    },
+    "ShoppingList": {
+      "title": "Shopping List",
+      "description": "A collection of items to buy",
+      "type": "object",
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/entities/GroceryItem" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "An item in the pantry/stock",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "current": { "type": "number" },
+        "min": { "type": "number" },
+        "unit": { "type": "string" }
+      }
+    },
+    "SavedList": {
+      "title": "Saved List",
+      "description": "Historical record of a completed purchase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "date": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/entities/GroceryItem" } },
+        "total": { "type": "number" },
+        "store": { "type": "string" }
+      }
+    },
+    "GiftItem": {
+      "title": "Gift Item",
+      "description": "An item in the gift list",
+      "type": "object",
+      "properties": {
+        "recipient": { "type": "string" },
+        "occasion": { "type": "string" },
+        "ideas": { "type": "string" },
+        "status": { "type": "string", "enum": ["planning", "bought", "given"] }
+      }
+    },
+    "HomeTask": {
+      "title": "Home Task",
+      "description": "Maintenance or general household task",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "med", "high"] },
+        "status": { "type": "string", "enum": ["todo", "doing", "done"] },
+        "category": { "type": "string" }
+      }
+    },
+    "FinanceItem": {
+      "title": "Finance Item",
+      "description": "Monthly cost or expense",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "value": { "type": "number" },
+        "type": { "type": "string", "enum": ["fixed", "variable"] },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      }
+    },
+    "Residence": {
+      "title": "Residence",
+      "description": "A physical home or residence profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "members": { "type": "array", "items": { "type": "string" } },
+        "inviteCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Records of user actions for security auditing",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "context": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "User ratings and suggestions during beta",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "rating": { "type": "number" },
+        "message": { "type": "string" },
+        "feature": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "AccessRequest": {
+      "title": "Access Request",
+      "description": "Pending requests to join or share a residence",
+      "type": "object",
+      "properties": {
+        "residenceId": { "type": "string" },
+        "requestingUserId": { "type": "string" },
+        "requestingUserEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data and preferences"
+    },
+    "/residences/{residenceId}": {
+      "schema": "Residence",
+      "description": "Data for a specific residence"
+    },
+    "/residences/{residenceId}/lists/{listId}": {
+      "schema": "ShoppingList",
+      "description": "Shopping lists for the residence"
+    },
+    "/residences/{residenceId}/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Inventory for the residence"
+    },
+    "/residences/{residenceId}/history/{historyId}": {
+      "schema": "SavedList",
+      "description": "Purchase history for the residence"
+    },
+    "/residences/{residenceId}/gifts/{giftId}": {
+      "schema": "GiftItem",
+      "description": "Gifts tracked in the residence"
+    },
+    "/residences/{residenceId}/tasks/{taskId}": {
+      "schema": "HomeTask",
+      "description": "Household tasks for the residence"
+    },
+    "/residences/{residenceId}/finances/{financeId}": {
+      "schema": "FinanceItem",
+      "description": "Monthly expenses for the residence"
+    },
+    "/logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security logs"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Beta user feedback"
+    },
+    "/residences/{residenceId}/accessRequests/{requestId}": {
+      "schema": "AccessRequest",
+      "description": "Access requests for a residence"
+    }
+  }
+}

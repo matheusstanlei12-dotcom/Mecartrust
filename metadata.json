@@ -1,0 +1,8 @@
+{
+  "name": "Lar360: Gestão Residencial",
+  "description": "Gestão completa da sua casa: lista de compras inteligente, controle de presentes, tarefas de manutenção e financeiro mensal em um só lugar.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}

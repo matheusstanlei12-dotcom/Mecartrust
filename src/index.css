@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2D6A4F;
+  --color-secondary: #FF9F1C;
+  --color-accent: #2EC4B6;
+  --color-background: #F8F9FA;
+  --color-card: #FFFFFF;
+  --color-text-main: #1B4332;
+  --color-border-main: #D8E2DC;
+  --color-error: #E63946;
+
+  --font-sans: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-main;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #D8E2DC;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #2D6A4F;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #D8E2DC transparent;
+}
+
+.markdown-report h1, .markdown-report h2, .markdown-report h3 {
+  @apply font-black text-primary uppercase tracking-tight mt-6 mb-3 text-sm;
+}
+.markdown-report p {
+  @apply mb-3 leading-relaxed text-xs;
+}
+.markdown-report ul, .markdown-report ol {
+  @apply mb-3 ml-4 list-disc text-xs;
+}
+.markdown-report li {
+  @apply mb-1.5;
+}
+.markdown-report table {
+  @apply w-full border-collapse mb-3;
+}
+.markdown-report th, .markdown-report td {
+  @apply border border-border-main p-2 text-[10px];
+}
+.markdown-report th {
+  @apply bg-primary/5 font-black uppercase tracking-widest text-[9px];
+}
+.markdown-report strong {
+  @apply font-black text-primary;
+}
