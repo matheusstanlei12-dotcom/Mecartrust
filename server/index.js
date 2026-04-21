@@ -26,6 +26,9 @@ const distPath = path.join(__dirname, '../dist');
 
 app_express.use(express.static(distPath));
 
+// Teste de vida (Health Check)
+app_express.get('/ping', (req, res) => res.send('pong'));
+
 // Rota para ver o QR Code de forma limpa (Deve vir ANTES do wildcard *)
 app_express.get('/qr', (req, res) => {
     if (!lastQr) {
