@@ -69,9 +69,9 @@ app_express.get('*', (req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server_http.listen(PORT, () => {
-  console.log(`🚀 Servidor Web rodando na porta ${PORT}`);
-  console.log(`🌐 Site disponível em: http://localhost:${PORT}`);
+server_http.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor Web rodando em 0.0.0.0:${PORT}`);
+  console.log(`🌐 QR Code disponível em: /qr`);
 });
 
 const client = new Client({
