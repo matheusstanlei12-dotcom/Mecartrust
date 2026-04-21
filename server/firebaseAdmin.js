@@ -12,26 +12,43 @@ const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
 let db = null;
 
 export function initFirebase() {
-  if (!fs.existsSync(serviceAccountPath)) {
+  let serviceAccount;
+
+  // 1. Tentar ler da variável de ambiente (Prod)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch (e) {
+      console.error('ERRO: Variável FIREBASE_SERVICE_ACCOUNT não é um JSON válido!');
+      return false;
+    }
+  } 
+  // 2. Tentar ler do arquivo local (Dev)
+  else if (fs.existsSync(serviceAccountPath)) {
+    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  } 
+  // 3. Falha Total
+  else {
     console.error('====================================================');
-    console.error('ERRO: serviceAccountKey.json não encontrado!');
-    console.error('Para o robô ter permissão de escrever no seu banco Firebase:');
-    console.error('1. Vá no Firebase Console > Configurações > Contas de serviço');
-    console.error('2. Clique em "Gerar nova chave privada"');
-    console.error('3. Salve o arquivo gerado dentro da pasta "server/" com o nome de "serviceAccountKey.json"');
+    console.error('ERRO: Credenciais do Firebase não encontradas!');
+    console.error('Localmente: Crie server/serviceAccountKey.json');
+    console.error('Na Nuvem: Adicione a variável FIREBASE_SERVICE_ACCOUNT');
     console.error('====================================================');
     return false;
   }
 
-  const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  try {
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
 
-  initializeApp({
-    credential: cert(serviceAccount)
-  });
-
-  db = getFirestore();
-  console.log('Firebase Admin inicializado com sucesso.');
-  return true;
+    db = getFirestore();
+    console.log('Firebase Admin inicializado com sucesso.');
+    return true;
+  } catch (err) {
+    console.error('Erro ao inicializar Firebase Admin:', err);
+    return false;
+  }
 }
 
 export { db, FieldValue };

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null) {
   let contents = [];
@@ -26,8 +26,8 @@ Retorne EXATAMENTE um JSON na estrutura:
       "target": "list" ou "inventory", 
       "item": { 
         "name": "Nome padronizado do item (ex: Arroz, Detergente Líquido)", 
-        "category": "Escolha entre: Frutas & Vegetais, Laticínios, Padaria, Carnes e Frios, Congelados, Bebidas, Mercearia/Despensa, Higiene Pessoal, Limpeza, Pet Shop, Lanches e Snacks, Outros", 
-        "quantity": NumeroInt 
+        "category": "Escolha entre: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Congelados, Bebidas, Despensa, Higiene Pessoal, Limpeza, Pet Shop, Lanches e Snacks, Outros", 
+        "quantity": 1 
       } 
     }
   ]
@@ -49,16 +49,19 @@ Retorne EXATAMENTE um JSON na estrutura:
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // Use the latest flash
-      contents: contents,
-      config: {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: contents }],
+      generationConfig: {
         responseMimeType: "application/json",
       }
     });
-    return JSON.parse(response.text || '{"items":[]}');
+    
+    const response = await result.response;
+    const text = response.text();
+    return JSON.parse(text || '{"actions":[]}');
   } catch(e) {
     console.error("AI Error processing message:", e);
-    return { items: [] };
+    return { actions: [] };
   }
 }
