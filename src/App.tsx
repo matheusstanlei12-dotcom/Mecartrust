@@ -36,7 +36,9 @@ import {
   BarChart,
   PieChart,
   Download,
-  ExternalLink
+  ExternalLink,
+  MapPin,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -176,6 +178,12 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Onboarding Phone State
+  const [needsPhoneOnboarding, setNeedsPhoneOnboarding] = useState(false);
+  const [onboardPhone, setOnboardPhone] = useState('');
+  const [onboardName, setOnboardName] = useState('');
+  const [onboardSaving, setOnboardSaving] = useState(false);
+
   const [lists, setLists] = useState<Record<string, GroceryItem[]>>({
     'Compras da Semana': [],
     'Carnes e Frios': [],
@@ -289,6 +297,12 @@ export default function App() {
           const data = doc.data();
           setIsAdmin(!!data.isAdmin || isHardcodedAdmin);
           setIsApproved(!!data.isApproved || isHardcodedAdmin);
+          
+          if (!data.phone) {
+            setNeedsPhoneOnboarding(true);
+          } else {
+            setNeedsPhoneOnboarding(false);
+          }
         } else if (isHardcodedAdmin) {
           setIsAdmin(true);
           setIsApproved(true);
@@ -346,6 +360,10 @@ export default function App() {
         const defaultId = res[0].id;
         setSelectedResidenceId(defaultId);
         localStorage.setItem('lar360_selected_residence', defaultId);
+      } else if (res.length === 0 || (selectedResidenceId && !isStillMember)) {
+        // Se o usuário não tem NENHUMA residência, force a tela de Selecionar/Criar
+        setSelectedResidenceId(null);
+        localStorage.removeItem('lar360_selected_residence');
       }
     });
 
@@ -833,13 +851,14 @@ export default function App() {
         const result = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
         // First user is the admin (or the user known to the system)
         const isFirstAdmin = authEmail.toLowerCase() === 'thiago.orlandi1@gmail.com';
+
         await setDoc(doc(db, 'users', result.user.uid), {
           uid: result.user.uid,
           email: result.user.email,
           isAdmin: isFirstAdmin,
           isApproved: isFirstAdmin,
           createdAt: serverTimestamp()
-        });
+        }, { merge: true });
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
@@ -855,7 +874,8 @@ export default function App() {
     });
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (e: React.MouseEvent) => {
+    e.preventDefault();
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -870,11 +890,29 @@ export default function App() {
         createdAt: serverTimestamp()
       }, { merge: true });
     } catch (error: any) {
-      setAuthError(error.message);
+      console.error(error);
+      setAuthError("Erro no Google: " + error.message);
     }
   };
 
   const handleSignOut = () => signOut(auth);
+
+  const saveOnboardPhone = async () => {
+    if (!user || !onboardPhone || !onboardName) return;
+    setOnboardSaving(true);
+    const cleanPhone = onboardPhone.replace(/\D/g, '');
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        phone: cleanPhone,
+        name: onboardName
+      }, { merge: true });
+      setNeedsPhoneOnboarding(false);
+    } catch(e) {
+      console.error(e);
+      alert('Erro ao salvar o telefone');
+    }
+    setOnboardSaving(false);
+  };
 
   const handleCameraClick = (mode: 'shopping' | 'stock' | 'prices') => {
     setIsReceiptMode(mode);
@@ -1111,7 +1149,21 @@ export default function App() {
     };
 
     const currentList = lists[activeList] || [];
-    const updatedList = [...currentList, newItem];
+    
+    let updatedList;
+    let targetId = tempId;
+    
+    const existingIndex = currentList.findIndex(i => i.name.toLowerCase() === newItemName.toLowerCase());
+    if (existingIndex >= 0) {
+      updatedList = [...currentList];
+      updatedList[existingIndex] = {
+        ...updatedList[existingIndex],
+        quantity: updatedList[existingIndex].quantity + newItemQuantity
+      };
+      targetId = updatedList[existingIndex].id;
+    } else {
+      updatedList = [...currentList, newItem];
+    }
     
     // Use the custom setItems but await it
     await setItems(updatedList);
@@ -1122,7 +1174,64 @@ export default function App() {
     setNewItemUnit('un');
 
     try {
-      await analyzeItem(nameAtCapture, tempId, activeList, updatedList);
+      if (existingIndex < 0) {
+        // Run AI silently to at least get a base value
+        analyzeItem(nameAtCapture, targetId, activeList, updatedList);
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const refreshPricesByLocation = async () => {
+    if (!user || !selectedResidenceId || items.length === 0) return;
+    setIsAnalyzing(true);
+    
+    // Mostremos um feedback claro de que pode demorar
+    alert("O Radar de Inteligência Artificial está cotando o preço total do seu carrinho nos maiores hipermercados mais perto de você agora!");
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Você é um avaliador de supermercados. Localização do usuário: ${locationName}. 
+        Mercados atuais sendo analisados: ${stores.map(s => s.name).join(', ')}.
+        Para a seguinte lista de produtos:
+        ${items.map(i => `- ${i.quantity} ${i.unit} de ${i.name}`).join('\n')}
+        
+        Estime o preço atual (realista, em BRL, na última semana) do valor unitário de cada um desses produtos em cada um desses supermercados locais.
+        Retorne exatamente um JSON neste formato:
+        {
+          "items": [
+            {
+               "itemName": "nome exato do item conforme listado",
+               "prices": {
+                  "Nome Exato do Mercado 1": 15.99,
+                  "Nome Exato do Mercado 2": 16.50
+               }
+            }
+          ]
+        }`,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const data = JSON.parse(response.text || '{}');
+      if (data.items) {
+        const updatedItems = items.map(item => {
+          // Busca case insensitive
+          const match = data.items.find((resItem: any) => 
+             resItem.itemName.toLowerCase() === item.name.toLowerCase()
+          );
+          if (match && match.prices) {
+             return { ...item, prices: match.prices };
+          }
+          return item;
+        });
+
+        await setItems(updatedItems);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Houve um erro na nuvem ao cotar os supermercados locais.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -1360,6 +1469,57 @@ export default function App() {
     );
   }
 
+  if (user && needsPhoneOnboarding) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-card w-full max-w-lg p-8 rounded-3xl border border-border-main shadow-2xl text-center flex flex-col items-center"
+        >
+          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+            <span className="text-5xl">🤖</span>
+          </div>
+          <h2 className="text-3xl font-black text-primary mb-4">Bem-vindo ao Mercatrust!</h2>
+          <p className="text-[#6B705C] font-medium leading-relaxed mb-6">
+            Vamos começar a planejar o seu estoque inteligente. Nossa IA integrada permite que você controle sua despensa enviando áudios no WhatsApp!<br/><br/>
+            Para conectar o seu "controle remoto", por favor insira abaixo o seu <strong>número de WhatsApp com DDD</strong>:
+          </p>
+          
+          <div className="text-left w-full mb-4">
+            <label className="block text-xs font-black uppercase text-[#6B705C] mb-1.5 ml-1">👤 Como quer ser chamado?</label>
+            <input 
+              type="text" 
+              value={onboardName}
+              onChange={(e) => setOnboardName(e.target.value)}
+              className="w-full bg-[#f8f9fa] border border-border-main rounded-xl py-4 px-5 focus:outline-none focus:ring-2 focus:ring-primary transition-all font-medium text-lg"
+              placeholder="Seu primeiro nome"
+            />
+          </div>
+
+          <div className="text-left w-full mb-8">
+            <label className="block text-xs font-black uppercase text-[#6B705C] mb-1.5 ml-1">📱 Seu melhor número (WhatsApp)</label>
+            <input 
+              type="tel" 
+              value={onboardPhone}
+              onChange={(e) => setOnboardPhone(e.target.value)}
+              className="w-full bg-[#f8f9fa] border border-border-main rounded-xl py-4 px-5 focus:outline-none focus:ring-2 focus:ring-primary transition-all font-medium text-lg"
+              placeholder="DDD + Número"
+            />
+          </div>
+
+          <button 
+            onClick={saveOnboardPhone}
+            disabled={onboardSaving || onboardPhone.length < 10 || !onboardName}
+            className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {onboardSaving ? 'Salvando...' : 'OK, CONECTAR!'}
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-4">
@@ -1414,6 +1574,7 @@ export default function App() {
 
           <div className="mt-6 flex flex-col gap-3">
             <button 
+              type="button"
               onClick={signInWithGoogle}
               className="w-full bg-white border border-border-main text-text-main py-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#f8f9fa] transition-all"
             >
@@ -1441,94 +1602,152 @@ export default function App() {
           animate={{ opacity: 1, scale: 1 }}
           className="bg-card w-full max-w-lg p-8 rounded-3xl border border-border-main shadow-2xl"
         >
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-4">🏠</div>
-            <h1 className="text-2xl font-black text-primary mb-2">Selecionar Residência</h1>
-            <p className="text-[#6B705C]">Escolha uma residência ativa ou cadastre uma nova.</p>
-          </div>
-
-          <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-            {residences.map(res => (
-              <button
-                key={res.id}
+          {residences.length === 0 ? (
+            <div className="animate-fade-in flex flex-col items-center">
+              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 text-primary">
+                <MapPin size={40} />
+              </div>
+              <h2 className="text-xl font-black text-primary mb-3">1. Localização do Estoque</h2>
+              <p className="text-sm text-[#6B705C] mb-6 text-center">Para que o nosso robô do Gemini consiga buscar as ofertas dos hipermercados perto da sua casa, libere o seu GPS.</p>
+              
+              <button 
+                type="button"
                 onClick={() => {
-                  setSelectedResidenceId(res.id);
-                  localStorage.setItem('lar360_selected_residence', res.id);
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => { alert('Localização ativada! Você já pode criar sua casa.'); findLocalStores(pos.coords.latitude, pos.coords.longitude); },
+                      () => alert('Acesso negado. Usaremos localização macro.')
+                    );
+                  }
                 }}
-                className="w-full p-4 border border-border-main rounded-2xl flex items-center justify-between hover:bg-primary/5 hover:border-primary transition-all group"
+                className="w-full bg-[#006D77] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs mb-8 hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <div className="text-left flex-1">
-                  <p className="font-bold text-lg">{res.name}</p>
-                  <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest flex items-center gap-2">
-                    {res.members.length} Membros • CÓDIGO: {res.inviteCode}
-                    <div className="flex items-center gap-1 ml-1">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          shareInviteCode(res.inviteCode);
-                        }}
-                        className="bg-secondary/10 p-1.5 rounded-lg text-secondary hover:bg-secondary hover:text-white transition-all"
-                      >
-                        <Share2 size={12} />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          shareInviteWhatsApp(res.inviteCode);
-                        }}
-                        className="bg-[#25D366]/10 p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366] hover:text-white transition-all"
-                      >
-                        <MessageSquare size={12} />
-                      </button>
+                <MapPin size={16} /> Liberar Radar (GPS)
+              </button>
+
+              <div className="w-full border-t border-border-main pt-6">
+                <h2 className="text-xl font-black text-primary mb-3 text-center">2. Nome da sua Casa</h2>
+                <form onSubmit={createResidence} className="space-y-4">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Minha Casa, Fazenda, Apê..."
+                    value={residenceNameInput}
+                    onChange={(e) => setResidenceNameInput(e.target.value)}
+                    className="w-full bg-[#f8f9fa] border border-border-main rounded-xl p-4 text-center text-lg font-medium shadow-inner"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!residenceNameInput.trim()}
+                    className="w-full bg-primary text-white py-4 rounded-xl hover:opacity-90 transition-all shadow-xl font-black uppercase tracking-widest disabled:opacity-50"
+                  >
+                    FINALIZAR CADASTRO
+                  </button>
+                </form>
+              </div>
+              <div className="w-full border-t border-border-main mt-6 pt-4 text-center">
+                 <p className="text-xs text-[#6B705C] mb-2 font-bold uppercase">Ou foi convidado?</p>
+                 <form onSubmit={joinResidence} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Cole o CÓDIGO de convite..."
+                    value={joinCodeInput}
+                    onChange={(e) => setJoinCodeInput(e.target.value)}
+                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium uppercase text-center"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isJoining || !joinCodeInput.trim()}
+                    className="bg-secondary text-white px-5 py-3 rounded-xl hover:opacity-90 font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
+                  >
+                    Entrar
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-center mb-8">
+                <div className="text-5xl mb-4">🏠</div>
+                <h1 className="text-2xl font-black text-primary mb-2">Selecionar Residência</h1>
+                <p className="text-[#6B705C]">Escolha uma residência ativa ou cadastre uma nova.</p>
+              </div>
+
+              <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {residences.map(res => (
+                  <button
+                    key={res.id}
+                    onClick={() => {
+                      setSelectedResidenceId(res.id);
+                      localStorage.setItem('lar360_selected_residence', res.id);
+                    }}
+                    className="w-full p-4 border border-border-main rounded-2xl flex items-center justify-between hover:bg-primary/5 hover:border-primary transition-all group"
+                  >
+                    <div className="text-left flex-1">
+                      <p className="font-bold text-lg">{res.name}</p>
+                      <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest flex items-center gap-2">
+                        {res.members.length} Membros • CÓDIGO: {res.inviteCode}
+                        <span className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                          <button 
+                            onClick={(e) => { e.preventDefault(); shareInviteCode(res.inviteCode); }}
+                            className="bg-secondary/10 p-1.5 rounded-lg text-secondary hover:bg-secondary hover:text-white transition-all"
+                          >
+                            <Share2 size={12} />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.preventDefault(); shareInviteWhatsApp(res.inviteCode); }}
+                            className="bg-[#25D366]/10 p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366] hover:text-white transition-all"
+                          >
+                            <MessageSquare size={12} />
+                          </button>
+                        </span>
+                      </p>
                     </div>
-                  </p>
-                </div>
-                <ChevronRight className="text-[#6B705C] group-hover:text-primary transition-all" size={20} />
-              </button>
-            ))}
-            {residences.length === 0 && (
-              <p className="text-center text-sm text-[#6B705C] py-4 italic">Nenhuma residência encontrada.</p>
-            )}
-          </div>
+                    <ChevronRight className="text-[#6B705C] group-hover:text-primary transition-all" size={20} />
+                  </button>
+                ))}
+              </div>
 
-          <div className="border-t border-border-main pt-6">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Entrar com Código</h3>
-            <form onSubmit={joinResidence} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Ex: ABC123"
-                value={joinCodeInput}
-                onChange={(e) => setJoinCodeInput(e.target.value)}
-                className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium uppercase"
-              />
-              <button
-                type="submit"
-                disabled={isJoining}
-                className="bg-secondary text-white px-5 py-3 rounded-xl hover:opacity-90 transition-all shadow-md font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
-              >
-                {isJoining ? '...' : 'Entrar'}
-              </button>
-            </form>
-          </div>
+              <div className="border-t border-border-main pt-6">
+                <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Entrar com Código</h3>
+                <form onSubmit={joinResidence} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: ABC123"
+                    value={joinCodeInput}
+                    onChange={(e) => setJoinCodeInput(e.target.value)}
+                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium uppercase"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isJoining}
+                    className="bg-secondary text-white px-5 py-3 rounded-xl hover:opacity-90 transition-all font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
+                  >
+                    {isJoining ? '...' : 'Entrar'}
+                  </button>
+                </form>
+              </div>
 
-          <div className="border-t border-border-main pt-6 mt-6">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Nova Residência</h3>
-            <form onSubmit={createResidence} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Ex: Minha Casa, Sítio..."
-                value={residenceNameInput}
-                onChange={(e) => setResidenceNameInput(e.target.value)}
-                className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium"
-              />
-              <button
-                type="submit"
-                className="bg-primary text-white p-3 rounded-xl hover:opacity-90 transition-all shadow-md"
-              >
-                <Plus size={20} />
-              </button>
-            </form>
-          </div>
+              <div className="border-t border-border-main pt-6 mt-6">
+                <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Nova Residência</h3>
+                <form onSubmit={createResidence} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: Minha Casa, Sítio..."
+                    value={residenceNameInput}
+                    onChange={(e) => setResidenceNameInput(e.target.value)}
+                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-primary text-white p-3 rounded-xl hover:opacity-90 transition-all"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </form>
+              </div>
+            </>
+          )}
           
           <button 
             onClick={handleSignOut}
@@ -2909,19 +3128,20 @@ export default function App() {
           </div>
 
           <div className="mt-6 p-4 bg-white/60 border border-white rounded-2xl shadow-sm">
-            <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">Monitorando Estoque em {locationName || 'sua região'}</p>
-            {isSearchingStores && <p className="text-[9px] text-accent animate-pulse mb-2">Buscando mercados locais...</p>}
+            <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">Radar Ativo: {locationName || 'Buscando...'}</p>
+            {isSearchingStores && <p className="text-[9px] text-accent animate-pulse mb-2">Localizando mercados...</p>}
             
             <button 
-              onClick={() => handleCameraClick('prices')}
-              disabled={!!isProcessingReceipt}
-              className="w-full mt-2 mb-4 bg-primary text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 shadow-sm active:scale-95 transition-all"
+              onClick={refreshPricesByLocation}
+              disabled={isAnalyzing || isSearchingStores}
+              className="w-full mt-2 mb-4 bg-primary text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#006D77] shadow-md active:scale-95 transition-all text-center"
             >
-              <Camera size={14} /> Atualizar Preços via Cupom
+              {isAnalyzing || isSearchingStores ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />} 
+              Cotar na Minha Região
             </button>
 
             <p className="text-[10px] text-[#444] leading-relaxed font-medium">
-              O sistema monitora seu estoque em tempo real. Itens abaixo do mínimo vão direto para o topo da sua **Lista da Semana**.
+              O sistema usará seu GPS para analisar ofertas reais na sua cidade usando a I.A. Gemini.
             </p>
           </div>
         </section>

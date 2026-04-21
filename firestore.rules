@@ -37,7 +37,7 @@ service cloud.firestore {
                       incoming().isApproved == false;
       allow update: if isAdmin() || (
         isOwner(userId) && 
-        incoming().diff(existing()).affectedKeys().hasOnly(['email'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'name'])
       );
     }
 
