@@ -1,8 +1,37 @@
 [phases.setup]
-nixPkgs = ["nodejs", "google-chrome-stable"]
+nixPkgs = [
+    "nodejs",
+    "google-chrome-stable",
+    "glib",
+    "nss",
+    "nspr",
+    "atk",
+    "at-spi2-atk",
+    "cups",
+    "dbus",
+    "libdrm",
+    "mesa",
+    "expat",
+    "pango",
+    "cairo",
+    "libX11",
+    "libXcomposite",
+    "libXdamage",
+    "libXext",
+    "libXfixes",
+    "libXrandr",
+    "libxcb",
+    "libxshmfence",
+    "libxkbcommon",
+    "alsa-lib"
+]
 
-[phase.install]
+[phases.install]
 cmds = ["npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome-stable"
