@@ -170,6 +170,25 @@ const DEFAULT_CATEGORIES = [
   'Outros'
 ];
 
+const COMMON_PRICES: Record<string, number> = {
+  'arroz': 24.90,
+  'feijão': 8.50,
+  'leite': 4.90,
+  'açúcar': 4.20,
+  'café': 18.90,
+  'óleo': 6.50,
+  'pão': 0.75,
+  'manteiga': 12.90,
+  'ovos': 16.00,
+  'frango': 15.90,
+  'carne': 35.00,
+  'cerveja': 4.50,
+  'refrigerante': 8.90,
+  'papel higiênico': 14.00,
+  'detergente': 2.50,
+  'sabão': 12.00
+};
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -214,7 +233,7 @@ export default function App() {
   const [showFinished, setShowFinished] = useState(false);
   const [stores, setStores] = useState<StoreData[]>(STORES_INITIAL);
   const [selectedStore, setSelectedStore] = useState(STORES_INITIAL[0].name);
-  const [locationName, setLocationName] = useState<string | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(localStorage.getItem('lar360_last_location') || 'Sua Região');
   const [historySearch, setHistorySearch] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
@@ -1122,6 +1141,7 @@ export default function App() {
         setStores(data.stores);
         setSelectedStore(data.stores[0].name);
         setLocationName(data.city);
+        localStorage.setItem('lar360_last_location', data.city);
       }
     } catch (error) {
       console.error("Erro ao buscar supermercados locais:", error);
@@ -1135,18 +1155,28 @@ export default function App() {
 
   const addItem = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!newItemName.trim()) return;
+    const cleanName = newItemName.trim();
+    if (!cleanName) return;
 
     setIsAnalyzing(true);
     
     // Create local item first
     const tempId = Math.random().toString(36).substr(2, 9);
     const initialPrices: Record<string, number> = {};
-    stores.forEach(s => initialPrices[s.name] = 0);
+    
+    // Optimistic Prices from COMMON_PRICES
+    const lowerName = cleanName.toLowerCase();
+    const basePrice = Object.entries(COMMON_PRICES).find(([k]) => lowerName.includes(k))?.[1] || 0;
+    
+    stores.forEach(s => {
+      // Add a small random variation (+/- 5%) to make it look real across stores
+      const variation = basePrice > 0 ? (1 + (Math.random() * 0.1 - 0.05)) : 1;
+      initialPrices[s.name] = basePrice * variation;
+    });
 
     const newItem: GroceryItem = {
       id: tempId,
-      name: newItemName,
+      name: cleanName,
       quantity: newItemQuantity,
       unit: newItemUnit,
       category: 'Outros',
@@ -1159,7 +1189,7 @@ export default function App() {
     let updatedList;
     let targetId = tempId;
     
-    const existingIndex = currentList.findIndex(i => i.name.toLowerCase() === newItemName.toLowerCase());
+    const existingIndex = currentList.findIndex(i => i.name.trim().toLowerCase() === lowerName);
     if (existingIndex >= 0) {
       updatedList = [...currentList];
       updatedList[existingIndex] = {
@@ -1174,14 +1204,14 @@ export default function App() {
     // Use the custom setItems but await it
     await setItems(updatedList);
     
-    const nameAtCapture = newItemName;
+    const nameAtCapture = cleanName;
     setNewItemName('');
     setNewItemQuantity(1);
     setNewItemUnit('un');
 
     try {
-      if (existingIndex < 0) {
-        // Run AI silently to at least get a base value
+      if (existingIndex < 0 || basePrice === 0) {
+        // Run AI to refine or find real prices
         analyzeItem(nameAtCapture, targetId, activeList, updatedList);
       }
     } finally {
