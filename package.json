@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "bot": "node server/index.js"
+    "bot": "node server/index.js",
+    "reset-bot": "powershell -Command \"Remove-Item -Path .wwebjs_auth, .wwebjs_cache -Recurse -Force -ErrorAction SilentlyContinue\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
