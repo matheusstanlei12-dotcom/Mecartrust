@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
-const { Client, RemoteAuth, MessageMedia } = pkg;
+const { Client, LocalAuth } = pkg;
 import express from 'express';
 import http from 'http';
 
@@ -11,269 +11,283 @@ const server_http = http.createServer(app_express);
 
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
 import { processInventoryMessage } from './aiService.js';
-import { FirestoreStore } from './sessionStore.js';
 
-// Inicializar banco
+// ─── 1. INICIALIZAR BANCO ────────────────────────────────────────────────────
 const hasDB = initFirebase();
 if (!hasDB) {
+  console.error('FATAL: Firebase não inicializado. Encerrando.');
   process.exit(1);
 }
 
-// Configuração de Pastas estáticas (Site)
+// ─── 2. ARQUIVOS ESTÁTICOS (SITE REACT) ─────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, '../dist');
-
 app_express.use(express.static(distPath));
 
-// Teste de vida (Health Check)
+// ─── 3. VARIÁVEIS DO ROBÔ ───────────────────────────────────────────────────
+let lastQr = null;
+let botReady = false;
+
+// ─── 4. ROTAS DO SERVIDOR ────────────────────────────────────────────────────
+
+// Health Check
 app_express.get('/ping', (req, res) => res.send('pong'));
 
-// Rota para TROCAR o número do WhatsApp (apaga a sessão e gera novo QR)
-app_express.get('/reset-session', async (req, res) => {
-    console.log('🔄 Solicitação de troca de número recebida...');
-    try {
-        await client.destroy();
-    } catch(e) { /* ignora erro se já estava desconectado */ }
-    
-    // Apagar pasta de sessão
-    const sessionPath = path.join(__dirname, '../.wwebjs_auth');
-    if (fs.existsSync(sessionPath)) {
-        fs.rmSync(sessionPath, { recursive: true, force: true });
-        console.log('🧹 Sessão antiga apagada com sucesso!');
-    }
-    lastQr = null;
-    
-    // Reiniciar o cliente após 2 segundos
-    setTimeout(() => {
-        console.log('🤖 Reiniciando robô para novo número...');
-        client.initialize().catch(err => console.error('Erro ao reiniciar:', err.message));
-    }, 2000);
-    
-    res.send(`
-        <html>
-            <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
-                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
-                    <h2 style="color:#25d366">✅ Sessão Reiniciada!</h2>
-                    <p style="color:#666">Aguarde 10 segundos e acesse <strong>/qr</strong> para escanear com o novo número.</p>
-                    <script>setTimeout(() => location.href='/qr', 10000)</script>
-                </div>
-            </body>
-        </html>
-    `);
+// Status do robô
+app_express.get('/status', (req, res) => {
+  res.json({ 
+    botReady, 
+    hasQr: !!lastQr,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Rota para ver o QR Code de forma limpa (Deve vir ANTES do wildcard *)
+// Página do QR Code
 app_express.get('/qr', (req, res) => {
-    if (!lastQr) {
-        return res.send(`
-            <html>
-                <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
-                    <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
-                        <h2 style="color:#f39c12;margin-bottom:20px">Aguardando Robô...</h2>
-                        <p style="color:#666">O QR Code ainda não foi gerado pelo servidor.</p>
-                        <p style="color:#999;font-size:0.8rem">Esta página irá atualizar sozinha em 3 segundos.</p>
-                    </div>
-                    <script>setTimeout(() => location.reload(), 3000)</script>
-                </body>
-            </html>
-        `);
-    }
-    
-    res.send(`
-        <html>
-            <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
-                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
-                    <h2 style="color:#25d366;margin-bottom:20px">Conectar MercaTrust</h2>
-                    <div id="qrcode"></div>
-                    <p style="margin-top:20px;color:#666">Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
-                    <a href="/reset-session" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#ff4444;color:white;border-radius:8px;text-decoration:none;font-size:0.9rem">🔄 Trocar Número do WhatsApp</a>
-                </div>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-                <script>
-                    new QRCode(document.getElementById("qrcode"), "${lastQr}");
-                    setTimeout(() => location.reload(), 30000);
-                </script>
-            </body>
-        </html>
+  if (botReady) {
+    return res.send(`
+      <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+        <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.1);text-align:center">
+          <h2 style="color:#25d366">✅ Robô já está conectado!</h2>
+          <p style="color:#666">O WhatsApp está ativo e funcionando.</p>
+          <a href="/reset-session" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#ff4444;color:white;border-radius:8px;text-decoration:none">🔄 Trocar Número</a>
+        </div>
+      </body></html>
     `);
+  }
+  
+  if (!lastQr) {
+    return res.send(`
+      <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+        <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.1);text-align:center">
+          <h2 style="color:#f39c12">⏳ Aguardando QR Code...</h2>
+          <p style="color:#666">O robô está iniciando. Aguarde alguns segundos.</p>
+        </div>
+        <script>setTimeout(() => location.reload(), 3000)</script>
+      </body></html>
+    `);
+  }
+  
+  res.send(`
+    <html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+      <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.1);text-align:center">
+        <h2 style="color:#25d366;margin-bottom:20px">📱 Conectar MercaTrust</h2>
+        <div id="qrcode"></div>
+        <p style="margin-top:20px;color:#666">WhatsApp → Aparelhos Conectados → Conectar um Aparelho</p>
+        <a href="/reset-session" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#ff4444;color:white;border-radius:8px;text-decoration:none;font-size:.9rem">🔄 Trocar Número</a>
+      </div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+      <script>
+        new QRCode(document.getElementById("qrcode"), "${lastQr}");
+        setTimeout(() => location.reload(), 30000);
+      </script>
+    </body></html>
+  `);
 });
 
-// Rota para o SPA (React)
-app_express.get('*', (req, res, next) => {
-  if (req.url === '/qr') return next(); // Força a rota /qr a ser ignorada aqui
-  if (req.url.startsWith('/api')) return next();
+// Resetar sessão
+app_express.get('/reset-session', async (req, res) => {
+  console.log('🔄 Resetando sessão do WhatsApp...');
+  botReady = false;
+  lastQr = null;
+  
+  try { await client.destroy(); } catch(e) {}
+  
+  const sessionPath = path.join(__dirname, '../.wwebjs_auth');
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+    console.log('🧹 Sessão apagada.');
+  }
+  
+  setTimeout(() => {
+    initBot();
+  }, 2000);
+  
+  res.send(`
+    <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+      <div style="background:white;padding:40px;border-radius:20px;text-align:center">
+        <h2 style="color:#25d366">✅ Sessão Resetada!</h2>
+        <p>Redirecionando para o QR Code em 10 segundos...</p>
+        <script>setTimeout(() => location.href='/qr', 10000)</script>
+      </div>
+    </body></html>
+  `);
+});
+
+// SPA React — DEVE SER A ÚLTIMA ROTA
+app_express.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
+// ─── 5. INICIAR SERVIDOR HTTP ────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 server_http.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor Web rodando em 0.0.0.0:${PORT}`);
-  console.log(`🌐 QR Code disponível em: /qr`);
 });
 
+// ─── 6. CONFIGURAÇÃO DO ROBÔ ─────────────────────────────────────────────────
 const client = new Client({
-  authStrategy: new RemoteAuth({
-    store: new FirestoreStore(),
-    backupSyncIntervalMs: 300000 // Salva sessão no Firebase a cada 5 minutos
-  }),
+  authStrategy: new LocalAuth({ dataPath: '/tmp/.wwebjs_auth' }),
   puppeteer: {
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process'
-      ]
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process'
+    ]
   }
 });
 
-let lastQr = null;
-
 client.on('qr', (qr) => {
-    lastQr = qr;
-    console.log('Novo QR Code gerado! Acesse /qr para escanear.');
+  lastQr = qr;
+  botReady = false;
+  console.log('📱 QR Code gerado! Acesse /qr para escanear.');
 });
 
-// Rota /qr removida daqui (movida para cima)
+client.on('authenticated', () => {
+  console.log('🔐 WhatsApp autenticado com sucesso!');
+});
 
-// Iniciar robô em segundo plano, DEPOIS que o servidor web já respondeu
-setTimeout(() => {
-    // Limpar arquivo de trava do Chrome de sessões anteriores que travaram
-    const lockFile = path.join(__dirname, '../.wwebjs_auth/session/SingletonLock');
-    if (fs.existsSync(lockFile)) {
-        fs.unlinkSync(lockFile);
-        console.log('🧹 Arquivo de trava do Chrome removido.');
-    }
-    
-    console.log('🤖 Iniciando motor do robô em segundo plano...');
-    client.initialize().catch(err => {
-        console.error('💥 ERRO AO INICIAR ROBÔ:', err.message);
-    });
-}, 5000);
+client.on('auth_failure', (msg) => {
+  console.error('❌ Falha na autenticação do WhatsApp:', msg);
+  lastQr = null;
+  botReady = false;
+});
+
+client.on('disconnected', (reason) => {
+  console.log('🔌 WhatsApp desconectado:', reason);
+  botReady = false;
+  // Tentar reconectar após 30 segundos
+  setTimeout(() => {
+    console.log('🔄 Tentando reconectar...');
+    initBot();
+  }, 30000);
+});
 
 client.on('ready', () => {
-    lastQr = null; 
-    console.log('✅ ROBÔ CONECTADO E PRONTO! WhatsApp funcionando.');
-    console.log('👀 Ouvindo por novos cadastros e mensagens...');
-    db.collection('users').onSnapshot((snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const user = change.doc.data();
-          
-          // Se o usuário tem telefone preenchido e ainda não recebeu boas-vindas
-          if (user.phone && !user.welcomed) {
-            const userName = user.name || 'Pessoa incrível';
-            const welcomeText = `🎉 Olá, *${userName}*! Que alegria ter você aqui! 🥳\n\nSou a Inteligência Artificial do *MercaTrust* e a partir de agora serei seu assistente de estoque! 🏠✨\n\nFunciona assim: toda vez que você ver que algo tá faltando em casa, é só me mandar um *áudio* rápido ou escrever:\n_"Acabou o pão e o leite!"_ 🥖🥛\n\nEu entendo e organizo tudo no sistema! Vamos testar? Me mande um áudio com o que tá faltando! 🚀`;
+  lastQr = null;
+  botReady = true;
+  console.log('✅ ROBÔ CONECTADO! WhatsApp funcionando 100%.');
 
-            try {
-              setTimeout(async () => {
-                // Usuário digita apenas DDD+número (ex: 31973368101)
-                // Sempre adicionamos 55 (Brasil) na frente
-                const rawPhone = String(user.phone).replace(/\D/g, '');
-                const fullPhone = '55' + rawPhone;
-                
-                console.log(`📱 Tentando enviar boas-vindas para: +${fullPhone} (${userName})`);
-                const contactId = await client.getNumberId(fullPhone);
-                
-                if (contactId && contactId._serialized) {
-                  await client.sendMessage(contactId._serialized, welcomeText);
-                  console.log(`✅ Boas-vindas enviadas com sucesso para ${userName}!`);
-                  
-                  await db.collection('users').doc(change.doc.id).update({ 
-                    welcomed: true,
-                    whatsappId: contactId._serialized.split('@')[0]
-                  });
-                } else {
-                  console.error(`❌ Número +${fullPhone} não tem WhatsApp ou é inválido.`);
-                }
-              }, 4000);
-            } catch (err) {
-               console.error('❌ Erro ao enviar boas-vindas:', err.message);
-            }
-          }
+  // Ouvir novos usuários para enviar boas-vindas
+  db.collection('users').onSnapshot((snapshot) => {
+    snapshot.docChanges().forEach(async (change) => {
+      if (change.type === 'added' || change.type === 'modified') {
+        const user = change.doc.data();
+        if (user.phone && !user.welcomed) {
+          await sendWelcomeMessage(change.doc.id, user);
         }
-      });
+      }
     });
+  });
 });
 
-client.on('message', async msg => {
-  // Ignora mensagens de grupos por enquanto
+// ─── 7. MENSAGEM DE BOAS-VINDAS ──────────────────────────────────────────────
+async function sendWelcomeMessage(docId, user) {
+  const userName = user.name || 'cliente';
+  const rawPhone = String(user.phone).replace(/\D/g, '');
+  const fullPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
+
+  const welcomeText = `🎉 Olá, *${userName}*! Bem-vindo ao *MercaTrust*! 🥳\n\nSou seu assistente inteligente de estoque. Funciona assim:\n\n📦 Para adicionar à lista de compras, me mande:\n_"Preciso de leite e arroz"_\n\n🎤 Ou mande um *áudio* falando o que está faltando!\n\nVamos começar? 🚀`;
+
+  try {
+    setTimeout(async () => {
+      const contactId = await client.getNumberId(fullPhone);
+      if (contactId) {
+        await client.sendMessage(contactId._serialized, welcomeText);
+        console.log(`✅ Boas-vindas enviadas para ${userName} (+${fullPhone})`);
+        await db.collection('users').doc(docId).update({
+          welcomed: true,
+          whatsappId: contactId._serialized.split('@')[0]
+        });
+      } else {
+        console.error(`❌ Número inválido: +${fullPhone}`);
+      }
+    }, 5000);
+  } catch (err) {
+    console.error('❌ Erro ao enviar boas-vindas:', err.message);
+  }
+}
+
+// ─── 8. PROCESSAR MENSAGENS RECEBIDAS ────────────────────────────────────────
+client.on('message', async (msg) => {
   const chat = await msg.getChat();
   if (chat.isGroup) return;
 
-  const authorPhone = msg.from.split('@')[0]; // ex: 553199999999
-  console.log(`📨 Mensagem recebida de: +${authorPhone}`);
+  const authorPhone = msg.from.split('@')[0];
+  const text = msg.body || '';
+  console.log(`📨 Mensagem de +${authorPhone}: "${text}"`);
+
+  // Saudação simples
+  const greetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'];
+  if (greetings.includes(text.trim().toLowerCase())) {
+    await msg.reply('Olá! 👋 Sou o assistente do *MercaTrust*!\nMe mande um *áudio* ou *texto* com o que está faltando em casa e eu organizo tudo na sua lista! 🛒');
+    return;
+  }
 
   let audioBase64 = null;
   let audioMime = null;
-  let text = msg.body || "";
 
-  // Se for uma mensagem de áudio (Pode ser ptt ou audio normal)
   if (msg.hasMedia) {
     const media = await msg.downloadMedia();
     if (media && media.mimetype.includes('audio')) {
       audioBase64 = media.data;
       audioMime = media.mimetype;
-      console.log('🎤 Áudio detectado, enviando para IA...');
-      msg.reply('🎤 Estou ouvindo seu áudio, um segundo...');
+      await msg.reply('🎤 Ouvi seu áudio! Processando...');
     }
   } else {
-    // Se for só oi/olá
-    if (text.trim().toLowerCase() === 'oi' || text.trim().toLowerCase() === 'olá') {
-      msg.reply('Olá! 👋 Eu sou o assistente do *MercaTrust*!\nMe mande um áudio ou texto com os itens que estão faltando em casa e eu organizo tudo no sistema pra você! 🛒');
-      return;
-    }
-    console.log(`💬 Texto recebido: "${text}"`);
-    msg.reply('⏳ Cadastrando itens no sistema, um momento...');
+    await msg.reply('⏳ Processando...');
   }
 
   try {
-    console.log('🤖 Enviando para IA processar...');
-    const jsonResult = await processInventoryMessage(text, audioBase64, audioMime);
-    console.log('🤖 Resposta da IA:', JSON.stringify(jsonResult));
-    
-    if (jsonResult.actions && jsonResult.actions.length > 0) {
-      
-      const itemList = jsonResult.actions.map(a => {
-        const icon = a.type === 'add' ? '✅' : '❌';
-        const tgt = a.target === 'inventory' ? 'Despensa' : 'Lista de Compras';
-        return `${icon} ${a.item?.quantity || 1}x ${a.item?.name} → ${tgt}`;
-      }).join('\n');
-      
-      console.log(`📦 Processando ${jsonResult.actions.length} ações no banco...`);
-      let dbResponse = await processInventoryActions(authorPhone, jsonResult.actions);
-      console.log(`✅ Banco atualizado: ${dbResponse}`);
-      
-      msg.reply(`Pronto! Aqui está o que fiz:\n${itemList}\n\n${dbResponse}`);
-    } else {
-      console.log('⚠️ IA não retornou ações válidas');
-      msg.reply('Não consegui identificar nenhum item de mercado na sua mensagem. Pode tentar falar de novo? 🤔');
-    }
+    const result = await processInventoryMessage(text, audioBase64, audioMime);
+    console.log('🤖 IA:', JSON.stringify(result));
 
-  } catch (error) {
-    console.error('💥 Erro ao processar mensagem:', error.message);
-    msg.reply('Desculpe, tive um probleminha para processar agora. Tente de novo! 😅');
+    if (result.actions && result.actions.length > 0) {
+      const lista = result.actions.map(a => {
+        const icone = a.type === 'add' ? '✅' : '❌';
+        const alvo = a.target === 'inventory' ? 'Estoque' : 'Lista de Compras';
+        return `${icone} ${a.item?.quantity || 1}x ${a.item?.name} → ${alvo}`;
+      }).join('\n');
+
+      const dbResp = await processInventoryActions(authorPhone, result.actions);
+      await msg.reply(`Feito! 🎉\n\n${lista}\n\n${dbResp}`);
+    } else {
+      await msg.reply('Não entendi o item. Pode repetir? Exemplo: _"preciso de arroz e feijão"_ 🙏');
+    }
+  } catch (err) {
+    console.error('💥 Erro:', err.message);
+    await msg.reply('Tive um probleminha. Tente novamente em instantes! 😅');
   }
 });
 
-// Lógica de "Insônia" - Mantém o robô acordado 24/7
-const keepAwake = () => {
-    const SELF_URL = process.env.RAILWAY_PUBLIC_DOMAIN 
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
-        : `http://localhost:${PORT}`;
-    setInterval(async () => {
-        try {
-            await fetch(`${SELF_URL}/ping`);
-            console.log(`⏰ [Keep-Awake] Servidor ativo.`);
-        } catch (err) {
-            console.error('❌ [Keep-Awake] Erro:', err.message);
-        }
-    }, 10 * 60 * 1000); // A cada 10 minutos
-};
+// ─── 9. INICIALIZAÇÃO DO ROBÔ ─────────────────────────────────────────────────
+function initBot() {
+  // Limpar lock file se existir
+  const lockFile = '/tmp/.wwebjs_auth/session/SingletonLock';
+  if (fs.existsSync(lockFile)) {
+    try { fs.unlinkSync(lockFile); } catch(e) {}
+    console.log('🧹 Lock removido.');
+  }
+  console.log('🤖 Iniciando robô...');
+  client.initialize().catch(err => {
+    console.error('💥 Erro ao iniciar robô:', err.message);
+    // Tentar novamente em 30 segundos
+    setTimeout(initBot, 30000);
+  });
+}
 
-// Iniciar keep-awake imediatamente
-keepAwake();
+// Iniciar robô 5 segundos após o servidor subir
+setTimeout(initBot, 5000);
+
+// ─── 10. KEEP-ALIVE (Manter servidor ativo) ──────────────────────────────────
+setInterval(async () => {
+  try {
+    await fetch(`http://localhost:${PORT}/ping`);
+  } catch (e) {}
+}, 10 * 60 * 1000);
