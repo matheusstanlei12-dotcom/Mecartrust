@@ -67,16 +67,21 @@ export async function processInventoryActions(phone, actionsArray) {
   const usersSnap = await db.collection('users').get();
   let userDoc = null;
 
+  console.log(`📊 [DEBUG] Total de usuários no banco: ${usersSnap.size}`);
+  
   usersSnap.forEach(doc => {
     const data = doc.data();
-    const dbPhone = String(data.phone || data.whatsappId || '').replace(/\D/g, '');
+    const dbPhone = String(data.phone || '').replace(/\D/g, '');
+    const dbWhatsappId = String(data.whatsappId || '').replace(/\D/g, '');
+    
+    console.log(`   - Usuário: ${data.name} | Cel: ${dbPhone} | WhatsAppID: ${dbWhatsappId}`);
     
     // Tentativa 1: Match exato
-    if (dbPhone === cleanPhone) {
+    if (dbPhone === cleanPhone || dbWhatsappId === cleanPhone) {
       userDoc = { id: doc.id, ...data };
     } 
-    // Tentativa 2: Match pelo sufixo de 7 dígitos (ignora 9º dígito, DDD e código de país)
-    else if (dbPhone.endsWith(searchSuffix)) {
+    // Tentativa 2: Match pelo sufixo de 7 dígitos
+    else if (dbPhone.endsWith(searchSuffix) || dbWhatsappId.endsWith(searchSuffix)) {
       userDoc = { id: doc.id, ...data };
     }
   });
