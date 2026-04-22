@@ -392,18 +392,26 @@ export default function App() {
       const persistedId = localStorage.getItem('lar360_selected_residence');
       const isStillMember = res.some(r => r.id === persistedId);
 
-      // Check for onboarding for new users
-      if (res.length === 0 && !localStorage.getItem('lar360_onboarded')) {
-        setShowOnboarding(true);
-      }
-
-      // Auto-select first if none selected or no longer member
-      if (res.length > 0 && (!selectedResidenceId || !isStillMember)) {
+      // Auto-create residence for new users
+      if (res.length === 0 && user) {
+        console.log("🏠 Criando residência automática...");
+        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        addDoc(collection(db, 'residences'), {
+          name: 'Minha Casa',
+          ownerId: user.uid,
+          members: [user.uid],
+          inviteCode,
+          createdAt: serverTimestamp()
+        }).then(ref => {
+          setSelectedResidenceId(ref.id);
+          localStorage.setItem('lar360_selected_residence', ref.id);
+          updateDoc(doc(db, 'users', user.uid), { activeResidenceId: ref.id });
+        });
+      } else if (res.length > 0 && (!selectedResidenceId || !isStillMember)) {
         const defaultId = res[0].id;
         setSelectedResidenceId(defaultId);
         localStorage.setItem('lar360_selected_residence', defaultId);
-      } else if (res.length === 0 || (selectedResidenceId && !isStillMember)) {
-        // Se o usuário não tem NENHUMA residência, force a tela de Selecionar/Criar
+      } else if (selectedResidenceId && !isStillMember) {
         setSelectedResidenceId(null);
         localStorage.removeItem('lar360_selected_residence');
       }
@@ -1927,13 +1935,14 @@ export default function App() {
                 >
                   <PieChart size={16} /> Relatório Geral
                 </button>
-                <button 
-                  onClick={() => setActiveTab('settings')}
-                  className={`w-full p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-bold text-sm ${
-                    activeTab === 'settings' ? 'bg-primary text-white shadow-sm' : 'hover:bg-primary/5 text-[#6B705C]'
-                  }`}
+                 <button 
+                  onClick={() => {
+                    const n = prompt('Novo nome para sua casa:', residences[0]?.name);
+                    if (n) updateResidenceName(n);
+                  }}
+                  className={`w-full p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-bold text-sm hover:bg-primary/5 text-[#6B705C]`}
                 >
-                  <Home size={16} /> Gerenciar Residência
+                  <Home size={16} /> Renomear Casa
                 </button>
 
 
@@ -1990,58 +1999,6 @@ export default function App() {
                 <div>
                   <h1 className="text-3xl font-black text-primary mb-2">Bem-vindo ao Lar360</h1>
                   <p className="text-[#6B705C] font-medium">O que você deseja gerenciar hoje?</p>
-                </div>
-                <div className="bg-white border border-border-main p-4 rounded-3xl flex items-center gap-4 shadow-sm">
-                  <div className="bg-primary/5 p-3 rounded-2xl">
-                    <Home size={24} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest leading-none mb-1">Residência Atual</p>
-                    <p className="font-bold text-lg leading-none flex items-center gap-2">
-                      {residences.find(r => r.id === selectedResidenceId)?.name || 'Carregando...'}
-                      {residences.find(r => r.id === selectedResidenceId)?.ownerId === user?.uid && (
-                        <button 
-                          onClick={() => {
-                            const n = prompt('Novo nome da residência:', residences.find(r => r.id === selectedResidenceId)?.name);
-                            if (n) updateResidenceName(n);
-                          }}
-                          className="text-[#6B705C] opacity-40 hover:opacity-100 transition-all"
-                        >
-                          <Wrench size={12} />
-                        </button>
-                      )}
-                    </p>
-                    <p className="text-[10px] font-bold text-secondary mt-1 flex items-center gap-2">
-                      CÓDIGO: 
-                      <span 
-                        onClick={() => shareInviteCode()}
-                        className="cursor-pointer hover:underline decoration-dotted"
-                      >
-                        {residences.find(r => r.id === selectedResidenceId)?.inviteCode || '---'}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button 
-                          onClick={() => shareInviteCode()}
-                          className="bg-secondary/10 p-1.5 rounded-lg text-secondary hover:bg-secondary/20 transition-all relative"
-                          title="Compartilhar Geral"
-                        >
-                          <Share2 size={12} />
-                          {copyFeedback && (
-                            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-secondary text-white text-[8px] font-black uppercase tracking-widest py-1 px-3 rounded shadow-xl whitespace-nowrap z-50">
-                              Copiado!
-                            </span>
-                          )}
-                        </button>
-                        <button 
-                          onClick={() => shareInviteWhatsApp()}
-                          className="bg-[#25D366]/10 p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366]/20 transition-all"
-                          title="Compartilhar no WhatsApp"
-                        >
-                          <MessageSquare size={12} />
-                        </button>
-                      </div>
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -2421,34 +2378,38 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Sync Card - Now more informative than actionable */}
-                  <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-[32px] p-8 shadow-sm flex flex-col relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 bg-[#25D366]/10 w-24 h-24 rounded-full flex items-center justify-center text-[#25D366]/20 font-black text-4xl">2</div>
+                  {/* Info Card */}
+                  <div className="bg-white border-2 border-primary/5 rounded-[32px] p-8 shadow-sm flex flex-col relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary/20 font-black text-4xl">
+                      🏠
+                    </div>
                     <div className="flex items-center gap-4 mb-6">
-                      <div className="w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center text-[10px] font-black">2</div>
+                      <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-[10px] font-black">
+                        {userProfile?.phone ? <Check size={12} /> : '2'}
+                      </div>
                       <div>
-                        <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Inteligência Multicasas</h3>
-                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">O robô agora pergunta para onde enviar!</p>
+                        <h3 className="text-lg font-black text-primary uppercase tracking-tight">Sua Casa Conectada</h3>
+                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Tudo o que você fala vai para aqui</p>
                       </div>
                     </div>
                     
                     <div className="space-y-4">
-                      <div className="bg-white/50 border border-[#25D366]/20 rounded-2xl p-5 mb-auto">
+                      <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 mb-auto">
                         <p className="text-xs text-[#333] leading-relaxed mb-4">
-                          Sua casa atual no site: <br/>
-                          <span className="text-sm font-black text-[#128C7E]">
-                            {residences.find(r => r.id === selectedResidenceId)?.name || 'Casa Principal'}
+                          Sua residência ativa: <br/>
+                          <span className="text-sm font-black text-primary">
+                            {residences[0]?.name || 'Minha Casa'}
                           </span>
                         </p>
-                        <p className="text-[10px] text-[#6B705C] leading-relaxed">
-                          Se você tiver mais de uma residência, o robô irá perguntar no WhatsApp em qual delas você quer adicionar o item.
+                        <p className="text-[10px] text-[#6B705C] leading-relaxed italic">
+                          O robô agora é exclusivo desta residência. Simples e sem complicação.
                         </p>
                       </div>
                       
-                      <div className="bg-[#128C7E]/10 rounded-2xl p-4 flex items-start gap-3">
-                        <Zap size={16} className="text-[#128C7E] shrink-0 mt-1" />
-                        <p className="text-[10px] text-[#128C7E] font-bold leading-tight">
-                          O robô já está configurado para ler seu estoque e suas listas automaticamente.
+                      <div className="bg-primary/10 rounded-2xl p-4 flex items-start gap-3">
+                        <Zap size={16} className="text-primary shrink-0 mt-1" />
+                        <p className="text-[10px] text-primary font-bold leading-tight">
+                          O assistente está pronto para gerenciar seu estoque e listas em tempo real.
                         </p>
                       </div>
                     </div>

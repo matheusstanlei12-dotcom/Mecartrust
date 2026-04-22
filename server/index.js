@@ -309,46 +309,11 @@ client.on('message', async (msg) => {
   }
 
   try {
-    // --- LÓGICA DE SESSÃO / ESCOLHA DE CASA ---
-    const isShortChoice = text.trim().length <= 2;
-    const isInviteCode = text.trim().length === 6;
-    const isCasaMention = text.toLowerCase().includes('casa');
-
-    if (userData && (isShortChoice || isInviteCode || isCasaMention)) {
-      const sessionSnap = await db.collection('sessions').doc(authorPhone).get();
-      if (sessionSnap.exists) {
-        const session = sessionSnap.data();
-        if (session.type === 'residence_choice' && session.pendingActions) {
-          console.log(`🔢 Processando escolha de casa: ${text}`);
-          // Processa a escolha (passando o texto da escolha)
-          const dbStatus = await processInventoryActions(authorPhone, session.pendingActions, text.trim());
-          
-          if (!dbStatus.includes('escolher a casa')) {
-             await db.collection('sessions').doc(authorPhone).delete(); // Limpa sessão se resolveu
-             await msg.reply(dbStatus);
-             return;
-          }
-        }
-      }
-    }
-
     const result = await processInventoryMessage(text, audioBase64, audioMime, firstName, imageBase64, imageMime);
     console.log('🤖 IA:', JSON.stringify(result));
 
     if (result.actions && result.actions.length > 0) {
-      // Processa no banco
       const dbStatus = await processInventoryActions(authorPhone, result.actions);
-      console.log('📊 Status DB:', dbStatus);
-      
-      // Se o banco pediu para escolher a casa, salva em sessão
-      if (dbStatus.includes('escolher a casa')) {
-        await db.collection('sessions').doc(authorPhone).set({
-          type: 'residence_choice',
-          pendingActions: result.actions,
-          createdAt: new Date()
-        });
-      }
-
       await msg.reply(dbStatus || result.reply || "Tudo certo! Já organizei isso para você. ✅");
     } else {
       // Se não houver ações (ex: pergunta fora de tópico ou saudação)
