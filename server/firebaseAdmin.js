@@ -87,16 +87,25 @@ export async function processInventoryActions(phone, actions, choice = null) {
     const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
     const myResidences = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Tratamento de ESCOLHA (Se o usuário respondeu ao menu)
+    // Tratamento de ESCOLHA (Se o usuário respondeu ao menu ou enviou um código)
     if (choice && myResidences.length > 1) {
+      const cleanChoice = choice.trim().toUpperCase();
       const idx = parseInt(choice) - 1;
+      
+      // 1. Tenta por índice (1, 2, 3...)
       if (!isNaN(idx) && myResidences[idx]) {
         residenceId = myResidences[idx].id;
       } else {
-        // Tenta por nome
-        const foundByName = myResidences.find(r => r.name.toLowerCase().includes(choice.toLowerCase()));
-        if (foundByName) residenceId = foundByName.id;
-        else return "Não entendi sua escolha. Por favor, responda o número da opção (ex: 1).";
+        // 2. Tenta por CÓDIGO de convite (ex: ZFIDED)
+        const foundByCode = myResidences.find(r => (r.inviteCode || '').toUpperCase() === cleanChoice);
+        if (foundByCode) {
+          residenceId = foundByCode.id;
+        } else {
+          // 3. Tenta por NOME (Contém)
+          const foundByName = myResidences.find(r => r.name.toLowerCase().includes(choice.toLowerCase()));
+          if (foundByName) residenceId = foundByName.id;
+          else return "Não entendi o código ou a casa. Por favor, digite o número da opção ou o código de 6 dígitos da casa (ex: ZFIDED).";
+        }
       }
     }
 
