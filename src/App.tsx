@@ -1640,168 +1640,36 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-card w-full max-w-lg p-8 rounded-3xl border border-border-main shadow-2xl"
+          className="bg-card w-full max-w-md p-10 rounded-[40px] border border-border-main shadow-2xl text-center"
         >
-          {residences.length === 0 ? (
-            <div className="animate-fade-in flex flex-col items-center">
-              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 text-primary">
-                <MapPin size={40} />
-              </div>
-              <h2 className="text-xl font-black text-primary mb-3">1. Localização do Estoque</h2>
-              <p className="text-sm text-[#6B705C] mb-6 text-center">Para que o nosso robô do Gemini consiga buscar as ofertas dos hipermercados perto da sua casa, libere o seu GPS.</p>
-              
-              <button 
-                type="button"
-                onClick={() => {
-                  if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                      (pos) => { alert('Localização ativada! Você já pode criar sua casa.'); findLocalStores(pos.coords.latitude, pos.coords.longitude); },
-                      () => alert('Acesso negado. Usaremos localização macro.')
-                    );
-                  }
-                }}
-                className="w-full bg-[#006D77] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs mb-8 hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-md"
-              >
-                <MapPin size={16} /> Liberar Radar (GPS)
-              </button>
-
-              <div className="w-full border-t border-border-main pt-6">
-                <h2 className="text-xl font-black text-primary mb-3 text-center">2. Nome da sua Casa</h2>
-                <form onSubmit={createResidence} className="space-y-4">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Minha Casa, Fazenda, Apê..."
-                    value={residenceNameInput}
-                    onChange={(e) => setResidenceNameInput(e.target.value)}
-                    className="w-full bg-[#f8f9fa] border border-border-main rounded-xl p-4 text-center text-lg font-medium shadow-inner"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!residenceNameInput.trim()}
-                    className="w-full bg-primary text-white py-4 rounded-xl hover:opacity-90 transition-all shadow-xl font-black uppercase tracking-widest disabled:opacity-50"
-                  >
-                    FINALIZAR CADASTRO
-                  </button>
-                </form>
-              </div>
-              <div className="w-full border-t border-border-main mt-6 pt-4 text-center">
-                 <p className="text-xs text-[#6B705C] mb-2 font-bold uppercase">Ou foi convidado?</p>
-                 <form onSubmit={joinResidence} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Cole o CÓDIGO de convite..."
-                    value={joinCodeInput}
-                    onChange={(e) => setJoinCodeInput(e.target.value)}
-                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium uppercase text-center"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isJoining || !joinCodeInput.trim()}
-                    className="bg-secondary text-white px-5 py-3 rounded-xl hover:opacity-90 font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
-                  >
-                    Entrar
-                  </button>
-                </form>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="text-center mb-8">
-                <div className="text-5xl mb-4">🏠</div>
-                <h1 className="text-2xl font-black text-primary mb-2">Selecionar Residência</h1>
-                <p className="text-[#6B705C]">Escolha uma residência ativa ou cadastre uma nova.</p>
-              </div>
-
-              <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {residences.map(res => (
-                  <button
-                    key={res.id}
-                    onClick={async () => {
-                      // Sincroniza imediatamente para o Robô
-                      if (user) {
-                        await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: res.id });
-                      }
-                      setSelectedResidenceId(res.id);
-                      localStorage.setItem('lar360_selected_residence', res.id);
-                    }}
-                    className="w-full p-4 border border-border-main rounded-2xl flex items-center justify-between hover:bg-primary/5 hover:border-primary transition-all group"
-                  >
-                    <div className="text-left flex-1">
-                      <p className="font-bold text-lg">{res.name}</p>
-                      <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest flex items-center gap-2">
-                        {res.members.length} Membros • CÓDIGO: {res.inviteCode}
-                        <span className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
-                          <button 
-                            onClick={(e) => { e.preventDefault(); shareInviteCode(res.inviteCode); }}
-                            className="bg-secondary/10 p-1.5 rounded-lg text-secondary hover:bg-secondary hover:text-white transition-all"
-                          >
-                            <Share2 size={12} />
-                          </button>
-                          <button 
-                            onClick={(e) => { e.preventDefault(); shareInviteWhatsApp(res.inviteCode); }}
-                            className="bg-[#25D366]/10 p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366] hover:text-white transition-all"
-                          >
-                            <MessageSquare size={12} />
-                          </button>
-                        </span>
-                      </p>
-                    </div>
-                    <ChevronRight className="text-[#6B705C] group-hover:text-primary transition-all" size={20} />
-                  </button>
-                ))}
-              </div>
-
-              <div className="border-t border-border-main pt-6">
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Entrar com Código</h3>
-                <form onSubmit={joinResidence} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ex: ABC123"
-                    value={joinCodeInput}
-                    onChange={(e) => setJoinCodeInput(e.target.value)}
-                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium uppercase"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isJoining}
-                    className="bg-secondary text-white px-5 py-3 rounded-xl hover:opacity-90 transition-all font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
-                  >
-                    {isJoining ? '...' : 'Entrar'}
-                  </button>
-                </form>
-              </div>
-
-              <div className="border-t border-border-main pt-6 mt-6">
-                <form onSubmit={createResidence} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ex: Minha Casa, Sítio..."
-                    value={residenceNameInput}
-                    onChange={(e) => setResidenceNameInput(e.target.value)}
-                    className="flex-1 bg-[#f8f9fa] border border-border-main rounded-xl p-3 text-sm font-medium"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-primary text-white p-3 rounded-xl hover:opacity-90 transition-all"
-                  >
-                    <Plus size={20} />
-                  </button>
-                </form>
-              </div>
-            </>
-          )}
+          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-8 mx-auto text-primary">
+            <Home size={48} className="animate-pulse" />
+          </div>
           
-          <button 
-            onClick={handleSignOut}
-            className="w-full mt-8 text-[#6B705C] font-black uppercase tracking-widest text-[10px] hover:underline"
-          >
-            Sair da Conta
-          </button>
+          <h2 className="text-2xl font-black text-primary mb-4 uppercase tracking-tighter italic">Localizando sua Casa...</h2>
+          <p className="text-[#6B705C] text-sm leading-relaxed mb-10">
+            Estamos preparando seu ambiente exclusivo do Lar 360. <br/>
+            Em instantes, você terá acesso total às suas listas e estoque.
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-center gap-3 text-primary font-black uppercase text-[10px] tracking-widest">
+              <Loader2 className="animate-spin" size={14} />
+              Sincronizando com Firestore
+            </div>
+            
+            <button 
+              onClick={handleSignOut}
+              className="mt-6 text-[#6B705C] font-black uppercase tracking-widest text-[10px] hover:underline"
+            >
+              Sair da Conta
+            </button>
+          </div>
         </motion.div>
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-background font-sans text-text-main flex flex-col overflow-hidden h-screen">
@@ -2066,36 +1934,7 @@ export default function App() {
               </div>
 
               <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
-                {/* WhatsApp Sync Card */}
-                <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-3xl p-6 shadow-sm">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="bg-[#25D366] text-white p-3 rounded-2xl shadow-lg">
-                      <MessageSquare size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Vincular WhatsApp</h3>
-                      <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Sincronize esta residência com o robô</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-[#444] mb-4 leading-relaxed font-medium">
-                    Clique no botão abaixo para garantir que todas as mensagens enviadas para o assistente do Lar360 subam diretamente para <strong>esta residência</strong>.
-                  </p>
-                  <button 
-                    onClick={async () => {
-                      if (user && selectedResidenceId) {
-                        try {
-                          await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: selectedResidenceId });
-                          alert('✅ Casa vinculada com sucesso! O robô agora salvará tudo aqui.');
-                        } catch (e) {
-                          alert('Erro ao vincular. Tente novamente.');
-                        }
-                      }
-                    }}
-                    className="w-full bg-[#25D366] text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#128C7E] transition-all shadow-md active:scale-95"
-                  >
-                    <RefreshCcw size={16} /> Vincular esta Casa ao WhatsApp
-                  </button>
-                </div>
+
 
                 {/* Info Card */}
                 <div className="bg-white border-2 border-primary/5 rounded-3xl p-6 shadow-sm">
@@ -2118,37 +1957,13 @@ export default function App() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <label className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest block mb-1">Código de Convite</label>
-                      <div className="bg-[#f8f9fa] border-2 border-dashed border-secondary/30 px-4 py-2 rounded-xl inline-flex items-center gap-3">
-                        <span 
-                          onClick={() => shareInviteCode()}
-                          className="font-black text-secondary tracking-widest cursor-pointer hover:underline decoration-dotted"
-                        >
-                          {residences.find(r => r.id === selectedResidenceId)?.inviteCode}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => shareInviteCode()}
-                            title="Compartilhar Geral"
-                            className="text-secondary opacity-60 hover:opacity-100 p-1 relative"
-                          >
-                            <Share2 size={16} />
-                            {copyFeedback && (
-                              <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-secondary text-white text-[8px] font-black uppercase tracking-widest py-1.5 px-3 rounded shadow-xl whitespace-nowrap z-50">
-                                Copiado!
-                              </span>
-                            )}
-                          </button>
-                          <button 
-                            onClick={() => shareInviteWhatsApp()}
-                            className="bg-[#25D366]/10 p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366] hover:text-white transition-all"
-                            title="Compartilhar no WhatsApp"
-                          >
-                            <MessageSquare size={16} />
-                          </button>
-                        </div>
+                      <label className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest block mb-1">Status</label>
+                      <div className="bg-primary/5 px-4 py-2 rounded-xl inline-flex items-center gap-2">
+                        <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                        <span className="font-black text-primary text-[10px] uppercase tracking-widest">Residência Ativa</span>
                       </div>
                     </div>
+
                   </div>
 
                   <div className="h-px bg-border-main my-6 opacity-30"></div>
@@ -2204,12 +2019,6 @@ export default function App() {
                 {/* Actions */}
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <button 
-                      onClick={() => setSelectedResidenceId(null)}
-                      className="flex-1 bg-white border border-border-main p-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#f8f9fa] transition-all"
-                    >
-                      <RefreshCcw size={16} /> Trocar de Residência
-                    </button>
                     {residences.find(r => r.id === selectedResidenceId)?.ownerId !== user?.uid && (
                       <button 
                         onClick={leaveResidence}
@@ -2219,6 +2028,7 @@ export default function App() {
                       </button>
                     )}
                   </div>
+
 
                   {residences.find(r => r.id === selectedResidenceId)?.ownerId === user?.uid && (
                     <button 
@@ -2324,16 +2134,11 @@ export default function App() {
                           <p className="text-[10px] font-black uppercase text-[#6B705C] mb-1 tracking-widest">Número Vinculado</p>
                           <p className="text-2xl font-black text-primary">+{userProfile.phone}</p>
                           <p className="text-[9px] text-primary/60 font-medium mt-3 uppercase tracking-tight">O robô já reconhece suas mensagens automaticamente.</p>
-                          <button 
-                            onClick={() => {
-                              // Reset phone partially to allow edit
-                              setOnboardPhone(userProfile.phone);
-                              setUserProfile(prev => ({ ...prev, phone: '' }));
-                            }}
-                            className="mt-5 text-[10px] font-black uppercase text-primary/40 hover:text-primary transition-all underline underline-offset-4"
-                          >
-                            Alterar Número de Telefone
-                          </button>
+                          <div className="mt-5 flex items-center justify-center gap-2">
+                             <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                             <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest">Identidade Confirmada</p>
+                          </div>
+
                         </div>
                       ) : (
                         <>

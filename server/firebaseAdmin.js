@@ -82,14 +82,10 @@ export async function processInventoryActions(phone, actions, choice = null) {
     const userDoc = candidates[0];
     const uid = userDoc.id;
 
-    // 2. Achar a Residência
-    let residenceId = userDoc.activeResidenceId;
-    const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
-    const myResidences = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
     // 2. Achar a única Residência do usuário (Foco em simplicidade total)
     const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
     let residenceId = null;
+
 
     if (resSnap.empty) {
       // Se por algum motivo não houver casa, cria uma agora mesmo
@@ -207,13 +203,11 @@ export async function processInventoryActions(phone, actions, choice = null) {
     }, { merge: true });
   }
 
-  // Busca nome e código da casa para transparência total no WhatsApp
   const resDoc = await db.collection('residences').doc(residenceId).get();
-  const resData = resDoc.data();
-  const resName = resData?.name || 'Casa';
-  const inviteCode = resData?.inviteCode || '???';
+  const resName = resDoc.data()?.name || 'Casa';
 
-  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa: *${resName}* (${inviteCode})`;
+  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa: *${resName}*`;
+
 
   } catch (err) {
     console.error('💥 Erro em processInventoryActions:', err.message);
