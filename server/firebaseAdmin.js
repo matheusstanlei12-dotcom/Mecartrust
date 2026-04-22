@@ -78,12 +78,24 @@ export async function processInventoryActions(phone, actions, choice = null) {
       return "Não encontrei sua conta. Por favor, cadastre seu número no site Lar 360 primeiro!";
     }
 
-    candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
+    candidates.sort((a, b) => {
+      // Prioriza quem tem casa ativa
+      if (!!b.activeResidenceId !== !!a.activeResidenceId) {
+        return (b.activeResidenceId ? 1 : -1);
+      }
+      // Se ambos forem iguais, pega o mais novo (createdAt)
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
     const userDoc = candidates[0];
     const uid = userDoc.id;
 
-    // 2. Achar a única Residência do usuário (Simplicidade Definitiva: 1 Usuário = 1 Casa)
-    const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
+
+    // 2. Achar a única Residência do usuário (Membro ou Dono)
+    const resSnap = await db.collection('residences').where('members', 'array-contains', uid).get();
+
     let residenceId = null;
 
     if (resSnap.empty) {
