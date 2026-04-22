@@ -234,6 +234,15 @@ export default function App() {
   const [residenceNameInput, setResidenceNameInput] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+
+  // Sincronizar residência ativa com o perfil do usuário para o Robô saber onde salvar
+  useEffect(() => {
+    if (user && selectedResidenceId) {
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, { activeResidenceId: selectedResidenceId })
+        .catch(e => console.error("Erro ao sincronizar residência ativa:", e));
+    }
+  }, [user, selectedResidenceId]);
   
   const [newItemName, setNewItemName] = useState('');
   const [inventoryForm, setInventoryForm] = useState({ name: '', current: 0, min: 1, unit: 'un' });

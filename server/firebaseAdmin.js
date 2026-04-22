@@ -94,18 +94,27 @@ export async function processInventoryActions(phone, actionsArray) {
   const uid = userDoc.id;
   console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
 
-  // 2. Achar a Residência (Sincronizado com a lógica do Site)
-  // Procuro na coleção principal de residências onde o usuário é dono
-  const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
-  let residenceId = null;
-
-  if (!resSnap.empty) {
-    residenceId = resSnap.docs[0].id;
+  // 2. Achar a Residência (Prioriza a que está ativa no SITE agora)
+  let residenceId = userDoc.activeResidenceId;
+  
+  if (residenceId) {
+    console.log(`📍 Usando residência ativa vinculada ao perfil: ${residenceId}`);
   } else {
-    // Fallback: Tenta achar onde ele é apenas um membro (caso não seja o dono)
-    const subResSnap = await db.collection(`users/${uid}/residences`).get();
-    if (!subResSnap.empty) {
-      residenceId = subResSnap.docs[0].id;
+    console.log(`🔍 Buscando residências onde o usuário é dono...`);
+    const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
+    
+    if (!resSnap.empty) {
+      // Pega a mais recente se houver várias (ordenando por id pois docs costumam ter IDs sequenciais no Firebase se vierem de datas próximas, mas o ideal seria timestamp)
+      residenceId = resSnap.docs[0].id;
+      console.log(`🏠 Residência encontrada via busca: ${residenceId}`);
+    } else {
+      // Fallback: Tenta achar onde ele é apenas um membro
+      console.log(`🔍 Fallback: Buscando residências como membro...`);
+      const subResSnap = await db.collection(`users/${uid}/residences`).get();
+      if (!subResSnap.empty) {
+        residenceId = subResSnap.docs[0].id;
+        console.log(`🏠 Residência (membro) encontrada: ${residenceId}`);
+      }
     }
   }
 
