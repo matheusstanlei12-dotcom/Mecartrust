@@ -14,9 +14,13 @@ let db = null;
 export function initFirebase() {
   let serviceAccount;
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  const firebaseEnv = process.env.FIREBASE_SERVICE_ACCOUNT || 
+                    process.env.CONTA_DE_SERVIÇO_FIREBASE || 
+                    process.env.CONTA_DE_SERVICO_FIREBASE;
+
+  if (firebaseEnv) {
     try {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      serviceAccount = JSON.parse(firebaseEnv);
     } catch (e) {
       console.error('ERRO: FIREBASE_SERVICE_ACCOUNT inválido!');
     }

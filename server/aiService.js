@@ -12,7 +12,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null, userName = '') {
   const model = genAI.getGenerativeModel({ 
-    model: 'models/gemini-1.5-flash'
+    model: 'gemini-2.0-flash'
   });
 
   const systemPrompt = `Você é o assistente inteligente "Lar 360", especialista em organização doméstica.
