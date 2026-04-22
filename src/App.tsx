@@ -2347,8 +2347,12 @@ export default function App() {
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Status Card */}
-                  <div className="bg-white border-2 border-primary/5 rounded-[32px] p-8 shadow-sm">
-                    <h3 className="text-sm font-black text-primary uppercase tracking-widest mb-6">Configuração da Conta</h3>
+                  <div className="bg-white border-2 border-primary/5 rounded-[32px] p-8 shadow-sm relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary/20 font-black text-4xl">1</div>
+                    <h3 className="text-sm font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                      <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-[10px]">1</span>
+                      Seu Cadastro de Acesso
+                    </h3>
                     
                     <div className="space-y-5">
                       <div>
@@ -2363,7 +2367,7 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">📱 Número de Telefone (WhatsApp)</label>
+                        <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">📱 Seu WhatsApp (Obrigatório)</label>
                         <input 
                           type="tel" 
                           value={onboardPhone}
@@ -2376,7 +2380,7 @@ export default function App() {
                           className="w-full bg-[#f8f9fa] border border-border-main rounded-2xl py-3.5 px-4 focus:ring-2 focus:ring-primary transition-all font-bold"
                           placeholder="55 + DDD + Número"
                         />
-                        <p className="text-[9px] text-[#9E9E9E] mt-2 italic">* O robô só responderá mensagens vindas deste número.</p>
+                        <p className="text-[9px] text-primary font-black mt-2 uppercase tracking-tighter italic">⚠️ É este número que o robô irá reconhecer automaticamente.</p>
                       </div>
 
                       <button 
@@ -2384,20 +2388,19 @@ export default function App() {
                         disabled={onboardSaving || onboardPhone.length < 12}
                         className="w-full bg-primary text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-opacity-90 disabled:opacity-50 shadow-lg shadow-primary/10 transition-all active:scale-95"
                       >
-                        {onboardSaving ? <Loader2 className="animate-spin" /> : 'Salvar Alterações'}
+                        {onboardSaving ? <Loader2 className="animate-spin" /> : 'Confirmar Meus Dados'}
                       </button>
                     </div>
                   </div>
 
                   {/* Sync Card */}
-                  <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-[32px] p-8 shadow-sm flex flex-col">
+                  <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-[32px] p-8 shadow-sm flex flex-col relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 bg-[#25D366]/10 w-24 h-24 rounded-full flex items-center justify-center text-[#25D366]/20 font-black text-4xl">2</div>
                     <div className="flex items-center gap-4 mb-6">
-                      <div className="bg-[#25D366] text-white p-3 rounded-2xl shadow-lg shadow-[#25D366]/20">
-                        <Home size={24} />
-                      </div>
+                      <div className="w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center text-[10px] font-black">2</div>
                       <div>
-                        <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Vínculo de Residência</h3>
-                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Destino das mensagens</p>
+                        <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Vincular à Residência</h3>
+                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Qual casa o robô deve atualizar?</p>
                       </div>
                     </div>
 
