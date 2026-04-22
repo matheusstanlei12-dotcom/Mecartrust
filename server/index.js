@@ -130,6 +130,7 @@ server_http.listen(PORT, '0.0.0.0', () => {
 
 const client = new Client({
   authStrategy: new RemoteAuth({
+    clientId: 'lar360-bot',
     store: new FirestoreStore(),
     backupSyncIntervalMs: 300000 // Backup a cada 5 min
   }),

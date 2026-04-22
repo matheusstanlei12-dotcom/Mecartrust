@@ -12,10 +12,10 @@ const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null, userName = '') {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash',
-    systemInstruction: {
-      role: "system",
-      parts: [{ text: `Você é o assistente inteligente "Lar 360", especialista em organização doméstica.
+    model: 'models/gemini-1.5-flash'
+  });
+
+  const systemPrompt = `Você é o assistente inteligente "Lar 360", especialista em organização doméstica.
 Sua missão é ajudar ${userName || 'o usuário'} a gerenciar a lista de compras e o estoque da casa.
 
 ESTILO DE RESPOSTA:
@@ -40,12 +40,10 @@ ESTRUTURA JSON:
   "actions": [
     { "type": "add/remove", "item": "nome do item", "quantity": 1, "unit": "un/kg/l/pct", "target": "list/inventory", "category": "..." }
   ]
-}` }]
-    }
-  });
+}`;
 
   try {
-    let parts = [];
+    let parts = [{ text: systemPrompt }];
     if (base64Audio && mimeType) {
       parts.push({ inlineData: { data: base64Audio, mimeType } });
       parts.push({ text: "O áudio acima contém uma instrução para o Lar 360. Identifique os itens e ações." });
@@ -69,18 +67,38 @@ ESTRUTURA JSON:
 
     const parsed = JSON.parse(responseText);
     
-    // Garantir estrutura básica
     return {
       actions: parsed.actions || [],
       reply: parsed.reply || "Ação processada com sucesso! ✅"
     };
 
   } catch (e) {
-    console.error('❌ CRÍTICO - Erro na IA Service:', e);
-    // Tenta uma resposta de fallback mais descritiva
+    console.error('❌ CRÍTICO - Erro na IA Service:', e.message);
+    
+    // MODO DE SEGURANÇA: Regex básico para não travar o sistema
+    const fallbackResult = { actions: [], reply: "" };
+    const cleanText = textData.toLowerCase();
+
+    // Regex simples para captar "Item" e "Ação"
+    if (cleanText.includes('adicione') || cleanText.includes('preciso') || cleanText.includes('coloca')) {
+      const match = textData.match(/(?:adicione|preciso de|coloca)\s+([^,y\.]+)/i);
+      if (match) {
+        fallbackResult.actions.push({ type: 'add', item: match[1].trim(), quantity: 1, target: 'list', category: 'Despensa' });
+        fallbackResult.reply = `⚠️ (Modo de Segurança) Notei que você quer adicionar *${match[1].trim()}* à lista. Anotado! ✅`;
+      }
+    } else if (cleanText.includes('comprei') || cleanText.includes('guardei')) {
+      const match = textData.match(/(?:comprei|guardei)\s+([^,y\.]+)/i);
+      if (match) {
+        fallbackResult.actions.push({ type: 'add', item: match[1].trim(), quantity: 1, target: 'inventory', category: 'Despensa' });
+        fallbackResult.reply = `⚠️ (Modo de Segurança) Registrei *${match[1].trim()}* no seu estoque. ✅`;
+      }
+    }
+
+    if (fallbackResult.actions.length > 0) return fallbackResult;
+
     return { 
       actions: [], 
-      reply: "Ops! Matheus, tive um pequeno problema técnico ao processar seu áudio ou mensagem. Pode tentar falar de novo de forma mais clara? 😅" 
+      reply: "Ops! Tive um problema técnico ao processar sua mensagem. Se for algo importante como 'Adicione café na lista', tente falar de forma bem simples enquanto resolvo isso! 😅" 
     };
   }
 }

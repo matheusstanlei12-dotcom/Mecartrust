@@ -46,8 +46,8 @@ export function initFirebase() {
         onSnapshot: () => (() => {}),
         delete: async () => {}
       }),
-      where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
-      get: async () => ({ empty: true, docs: [] }),
+      where: () => ({ get: async () => ({ empty: true, docs: [], forEach: () => {} }) }),
+      get: async () => ({ empty: true, docs: [], forEach: (cb) => { [].forEach(cb) } }),
       onSnapshot: () => (() => {}),
       add: async () => { console.error(`❌ Erro: Tentativa de adicionar em "${name}" sem Firebase configurado.`); }
     })
