@@ -17,68 +17,52 @@ const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null) {
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
+  const systemInstructions = `Você é o assistente inteligente do sistema "Lar 360", especialista em gestão de estoque e listas de compras.
+Sua personalidade é amigável, prestativa e organizada. Você deve fazer o usuário se sentir confortável e bem atendido.
+
+REGRAS DE CONDUTA:
+1. FOCO TOTAL: Você só responde sobre gestão de estoque, listas de compras e itens domésticos.
+2. SE FORA DE TÓPICO: Se o usuário fizer perguntas sobre outros assuntos (história, política, piadas off-topic, etc), responda educadamente que você é especialista no Lar 360 e só pode ajudar com a organização da casa.
+3. INTERATIVIDADE: Use frases naturais e amigáveis no campo "reply".
+
+FORMATO DE RETORNO (JSON APENAS):
+{
+  "actions": [
+    {
+      "type": "add" | "remove",
+      "target": "list" | "inventory",
+      "item": { "name": "string", "category": "string", "quantity": number }
+    }
+  ],
+  "reply": "Sua resposta amigável aqui para o usuário"
+}
+
+CATEGORIAS: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Bebidas, Despensa, Higiene Pessoal, Limpeza, Outros.`;
+
   try {
-    let prompt = '';
     let parts = [];
-
     if (base64Audio && mimeType) {
-      // Com áudio: transcrever e interpretar
-      prompt = `Você é um assistente de lista de compras. Analise este áudio e identifique os itens mencionados.
-      
-Retorne SOMENTE este JSON (sem markdown, sem texto extra):
-{"actions":[{"type":"add","target":"list","item":{"name":"Nome do Item","category":"Despensa","quantity":1}}]}
-
-Se não identificar itens, retorne: {"actions":[]}`;
-      
-      parts = [
-        { inlineData: { data: base64Audio, mimeType } },
-        { text: prompt }
-      ];
+      parts.push({ inlineData: { data: base64Audio, mimeType } });
+      parts.push({ text: `${systemInstructions}\n\nAnalise o áudio e responda conforme as regras.` });
     } else {
-      // Só texto
-      prompt = `Você é um assistente de lista de compras. O usuário disse: "${textData}"
-
-Extraia os itens de mercado mencionados e retorne SOMENTE este JSON (sem markdown, sem \`\`\`, sem texto extra):
-{"actions":[{"type":"add","target":"list","item":{"name":"Nome do Item","category":"Despensa","quantity":1}}]}
-
-Regras:
-- "add" + "list" = comprar/adicionar à lista de compras
-- "add" + "inventory" = guardar no estoque (quando disse que já comprou)
-- "remove" + "inventory" = consumiu/usou um item
-- quantity deve ser número inteiro
-- category: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Bebidas, Despensa, Higiene Pessoal, Limpeza, Outros
-
-Exemplos:
-"preciso de arroz" → {"actions":[{"type":"add","target":"list","item":{"name":"Arroz","category":"Despensa","quantity":1}}]}
-"adicione leite e pão" → {"actions":[{"type":"add","target":"list","item":{"name":"Leite","category":"Laticínios","quantity":1}},{"type":"add","target":"list","item":{"name":"Pão","category":"Padaria","quantity":1}}]}
-"acabou o sabão" → {"actions":[{"type":"add","target":"list","item":{"name":"Sabão","category":"Limpeza","quantity":1}}]}
-"comprei feijão" → {"actions":[{"type":"add","target":"inventory","item":{"name":"Feijão","category":"Despensa","quantity":1}}]}
-
-Retorne SOMENTE o JSON, sem mais nada:`;
-      
-      parts = [{ text: prompt }];
+      parts.push({ text: `${systemInstructions}\n\nUsuário disse: "${textData}"` });
     }
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0 }
+      generationConfig: { temperature: 0.2 }
     });
 
     let responseText = result.response.text().trim();
-    console.log('🤖 IA raw:', responseText);
-
-    // Limpar markdown se houver
-    responseText = responseText
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
+    
+    // Limpar markdown
+    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     const parsed = JSON.parse(responseText);
-    console.log('✅ IA parsed:', JSON.stringify(parsed));
     return parsed;
 
   } catch (e) {
     console.error('❌ Erro na IA:', e.message);
-    return { actions: [] };
+    return { actions: [], reply: "Desculpe, tive um probleminha para entender agora. Pode repetir? 😅" };
   }
 }

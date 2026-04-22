@@ -299,24 +299,14 @@ client.on('message', async (msg) => {
     console.log('🤖 IA:', JSON.stringify(result));
 
     if (result.actions && result.actions.length > 0) {
-      const lista = result.actions.map(a => {
-        const icone = a.type === 'add' ? '✅' : '🗑️';
-        const alvo = a.target === 'inventory' ? 'Estoque' : 'Lista de Compras';
-        return `${icone} ${a.item?.quantity || 1}x *${a.item?.name}* → ${alvo}`;
-      }).join('\n');
-
-      const dbResp = await processInventoryActions(authorPhone, result.actions);
+      // Processa no banco
+      await processInventoryActions(authorPhone, result.actions);
       
-      const conclusao = firstName
-        ? `Feito, *${firstName}*! 🎉\n\n${lista}\n\n_${dbResp}_`
-        : `Feito! 🎉\n\n${lista}\n\n_${dbResp}_`;
-      
-      await msg.reply(conclusao);
+      // Responde com o texto amigável da IA
+      await msg.reply(result.reply || "Ação realizada com sucesso! ✅");
     } else {
-      await msg.reply(
-        `Hmm, não consegui identificar nenhum item. 🤔\n\n` +
-        `Tente assim:\n_"Preciso de arroz e feijão"_ ou mande um 🎤 áudio!`
-      );
+      // Se não houver ações, mas houver uma resposta (ex: pergunta fora de tópico)
+      await msg.reply(result.reply || "Hmm, não consegui identificar a ação. Pode repetir? 🤔");
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
