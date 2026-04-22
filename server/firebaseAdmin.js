@@ -182,5 +182,5 @@ export async function processInventoryActions(phone, actionsArray) {
     await listRef.set({ items: listItems, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
 
-  return `Operação realizada com sucesso na lista "${listName}"! ✅`;
+  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"*\n🏠 Casa ID: \`${residenceId}\``;
 }

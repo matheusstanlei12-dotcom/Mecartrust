@@ -580,7 +580,7 @@ export default function App() {
       }, 0);
     }, 0);
 
-    const details = finances.map(f => `${f.description}: R$ ${f.value.toFixed(2)} (${f.type})`).join(', ');
+    const details = finances.map(f => `${f.description}: R$ ${safeToFixed(f.value)} (${f.type})`).join(', ');
 
     try {
       const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -589,10 +589,10 @@ export default function App() {
         Analise os gastos da residência atual para o mês presente.
         
         DADOS:
-        - Custos Fixos: R$ ${(fixedCosts ?? 0).toFixed(2)}
-        - Custos Variáveis: R$ ${(varCosts ?? 0).toFixed(2)}
-        - Estimativa de Compras Atuais: R$ ${(groceryTotal ?? 0).toFixed(2)}
-        - Total Geral: R$ ${((fixedCosts ?? 0) + (varCosts ?? 0) + (groceryTotal ?? 0)).toFixed(2)}
+        - Custos Fixos: R$ ${safeToFixed(fixedCosts)}
+        - Custos Variáveis: R$ ${safeToFixed(varCosts)}
+        - Estimativa de Compras Atuais: R$ ${safeToFixed(groceryTotal)}
+        - Total Geral: R$ ${safeToFixed((fixedCosts ?? 0) + (varCosts ?? 0) + (groceryTotal ?? 0))}
         - Lançamentos detalhados: ${details}
         
         OBJETIVO:
@@ -1468,8 +1468,8 @@ export default function App() {
 
   const shareViaWhatsApp = (itemsToShare: GroceryItem[], listName: string, total: number) => {
     const text = `🛒 *Lista de Compras: ${listName}*\n\n` + 
-      itemsToShare.map(i => `${i.checked ? '✅' : '⬜'} ${i.name} - R$ ${(i.prices[selectedStore] ?? 0).toFixed(2)}`).join('\n') +
-      `\n\n💰 *Total Estimado: R$ ${(total || 0).toFixed(2)}* (no ${selectedStore})`;
+      itemsToShare.map(i => `${i.checked ? '✅' : '⬜'} ${i.name} - R$ ${safeToFixed(i.prices[selectedStore])}`).join('\n') +
+      `\n\n💰 *Total Estimado: R$ ${safeToFixed(total)}* (no ${selectedStore})`;
     
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
