@@ -2328,33 +2328,21 @@ export default function App() {
 
           {activeTab === 'lists' && (
             <>
-              <AnimatePresence>
-                {showFinished && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-10 font-sans"
+              {showFinished && (
+                <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-10 font-sans">
+                  <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
+                    <CheckCircle2 size={40} />
+                  </div>
+                  <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Lista Finalizada!</h2>
+                  <p className="text-[#6B705C] mt-2 mb-6">A lista foi salva em seu Histórico.</p>
+                  <button 
+                    onClick={() => shareViaWhatsApp(history[0]?.items || [], history[0]?.name || 'Lista', history[0]?.total || 0)}
+                    className="bg-[#25D366] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-md"
                   >
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', damping: 10 }}
-                      className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center text-white mb-4 shadow-xl"
-                    >
-                      <CheckCircle2 size={40} />
-                    </motion.div>
-                    <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Lista Finalizada!</h2>
-                    <p className="text-[#6B705C] mt-2 mb-6">A lista foi salva em seu Histórico.</p>
-                    <button 
-                      onClick={() => shareViaWhatsApp(history[0]?.items || [], history[0]?.name || 'Lista', history[0]?.total || 0)}
-                      className="bg-[#25D366] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-md"
-                    >
-                      <MessageSquare size={18} /> Compartilhar Recibo
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    <MessageSquare size={18} /> Compartilhar Recibo
+                  </button>
+                </div>
+              )}
 
               {/* Mobile Submenu for Lists */}
               <div className="md:hidden flex items-center gap-2 overflow-x-auto pb-4 mb-4 custom-scrollbar whitespace-nowrap">
@@ -2531,12 +2519,11 @@ export default function App() {
                         <div className="h-px bg-border-main flex-1 opacity-50"></div>
                       </div>
                       <div className="space-y-px">
-                        {categoryItems.map((item, idx) => (
-                          <motion.div 
-                            key={`${item.id}-${idx}`}
-                            layout
-                            className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
-                          >
+                          {categoryItems.map((item, idx) => (
+                            <div 
+                              key={`${item.id}-${idx}-${activeList}`}
+                              className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
+                            >
                               <button 
                                 onClick={() => toggleCheck(item.id)}
                                 className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${
