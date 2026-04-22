@@ -166,38 +166,32 @@ client.on('ready', () => {
           // Se o usuário tem telefone preenchido e ainda não recebeu boas-vindas
           if (user.phone && !user.welcomed) {
             const userName = user.name || 'Pessoa incrível';
-            const welcomeText = `🎉 Olá, *${userName}*! Que alegria ter você aqui! 🥳
-
-Sou a Inteligência Artificial do *Lar360* e a partir de agora serei seu novo melhor amigo no controle de estoque da sua casa! 🏠✨
-
-A mágica já começou. Funciona assim:
-Toda vez que você abrir a geladeira ou despensa e ver que tá faltando alguma coisa, é só me mandar um *áudio* rápido ou escrever: 
-_"Acabou o pão e o leite!"_ 🥖🥛
-
-Eu entendo sua lista na mesma hora e deixo tudo perfeitamente anotado e organizado no sistema pra quando você for no mercado! Vamos testar? Me mande um áudio com o que tá faltando! 🚀`;
+            const welcomeText = `🎉 Olá, *${userName}*! Que alegria ter você aqui! 🥳\n\nSou a Inteligência Artificial do *MercaTrust* e a partir de agora serei seu assistente de estoque! 🏠✨\n\nFunciona assim: toda vez que você ver que algo tá faltando em casa, é só me mandar um *áudio* rápido ou escrever:\n_"Acabou o pão e o leite!"_ 🥖🥛\n\nEu entendo e organizo tudo no sistema! Vamos testar? Me mande um áudio com o que tá faltando! 🚀`;
 
             try {
-              // Delayzinho pra não parecer tão robô e dar tempo do front renderizar
               setTimeout(async () => {
-                const phoneForLib = "55" + user.phone;
-                const contactId = await client.getNumberId(phoneForLib);
+                // Usuário digita apenas DDD+número (ex: 31973368101)
+                // Sempre adicionamos 55 (Brasil) na frente
+                const rawPhone = String(user.phone).replace(/\D/g, '');
+                const fullPhone = '55' + rawPhone;
+                
+                console.log(`📱 Tentando enviar boas-vindas para: +${fullPhone} (${userName})`);
+                const contactId = await client.getNumberId(fullPhone);
                 
                 if (contactId && contactId._serialized) {
-                  const internalPhone = contactId._serialized.split('@')[0];
                   await client.sendMessage(contactId._serialized, welcomeText);
-                  console.log(`Mensagem de boas-vindas enviada para o novo usuário: ${userName} (${user.phone}) -> ${internalPhone}`);
+                  console.log(`✅ Boas-vindas enviadas com sucesso para ${userName}!`);
                   
-                  // Marca no banco que esse usuário já foi recebido para não reenviar nas próximas edições
                   await db.collection('users').doc(change.doc.id).update({ 
                     welcomed: true,
-                    whatsappId: internalPhone 
+                    whatsappId: contactId._serialized.split('@')[0]
                   });
                 } else {
-                  console.error(`Número de telefone não possui WhatsApp válido: ${phoneForLib}`);
+                  console.error(`❌ Número +${fullPhone} não tem WhatsApp ou é inválido.`);
                 }
               }, 4000);
             } catch (err) {
-               console.error("Erro ao enviar boas vindas", err);
+               console.error('❌ Erro ao enviar boas-vindas:', err.message);
             }
           }
         }
