@@ -61,7 +61,7 @@ export async function processInventoryActions(phone, actionsArray) {
   const cleanPhone = String(phone).replace(/\D/g, '');
   const last8 = cleanPhone.slice(-8);
 
-  console.log(`🔍 Buscando usuário para o telefone: ${cleanPhone}`);
+  console.log(`🔍 [FIREBASE] Buscando usuário para WhatsApp: ${cleanPhone} (Final: ${last8})`);
 
   // 1. Achar o Usuário
   const usersSnap = await db.collection('users').get();
@@ -69,14 +69,21 @@ export async function processInventoryActions(phone, actionsArray) {
 
   usersSnap.forEach(doc => {
     const data = doc.data();
-    if (data.whatsappId === cleanPhone || (data.phone && String(data.phone).replace(/\D/g, '').endsWith(last8))) {
+    const dbPhone = String(data.phone || data.whatsappId || '').replace(/\D/g, '');
+    
+    // Tentativa 1: Match exato
+    if (dbPhone === cleanPhone) {
+      userDoc = { id: doc.id, ...data };
+    } 
+    // Tentativa 2: Match pelos últimos 8 dígitos (ignora o 9 e o DDD)
+    else if (dbPhone.endsWith(last8)) {
       userDoc = { id: doc.id, ...data };
     }
   });
 
   if (!userDoc) {
-    console.log('❌ Usuário não encontrado no banco.');
-    return "Não encontrei nenhuma conta com seu número. Cadastre o telefone no app primeiro!";
+    console.error(`❌ [FIREBASE] Usuário não encontrado para [${cleanPhone}]`);
+    return "Não encontrei sua conta no Lar 360. Verifique se o seu número de WhatsApp no app está cadastrado corretamente!";
   }
 
   const uid = userDoc.id;
@@ -102,14 +109,16 @@ export async function processInventoryActions(phone, actionsArray) {
     console.log(`❕ Nenhuma lista encontrada. Criando padrão.`);
     listRef = db.collection(`residences/${residenceId}/lists`).doc(listName);
   } else {
-    // Tenta 'Compras da Semana', se não, pega a primeira q existir
+    // Tenta 'Compras da Semana'
     const preferred = listSnap.docs.find(d => d.id === 'Compras da Semana');
     if (preferred) {
       listRef = preferred.ref;
       listName = preferred.id;
     } else {
+      // Se não achar, pega a PRIMEIRA que existir para garantir que o usuário veja o item
       listRef = listSnap.docs[0].ref;
       listName = listSnap.docs[0].id;
+      console.log(`📋 Usando lista existente encontrada: ${listName}`);
     }
   }
 
