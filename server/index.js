@@ -303,13 +303,19 @@ client.on('message', async (msg) => {
 
     if (result.actions && result.actions.length > 0) {
       // Processa no banco
-      await processInventoryActions(authorPhone, result.actions);
+      const dbStatus = await processInventoryActions(authorPhone, result.actions);
+      console.log('📊 Status DB:', dbStatus);
       
-      // Responde com o texto amigável da IA
-      await msg.reply(result.reply || "Ação realizada com sucesso! ✅");
+      // Se o banco retornar um erro conhecido (ex: não achou usuário), avisa o usuário.
+      // Caso contrário, usa o texto amigável da IA.
+      if (dbStatus.startsWith('Não encontrei') || dbStatus.startsWith('Você ainda não')) {
+        await msg.reply(`⚠️ *Atenção:* ${dbStatus}`);
+      } else {
+        await msg.reply(result.reply || "Tudo certo! Já organizei isso para você. ✅");
+      }
     } else {
-      // Se não houver ações, mas houver uma resposta (ex: pergunta fora de tópico)
-      await msg.reply(result.reply || "Hmm, não consegui identificar a ação. Pode repetir? 🤔");
+      // Se não houver ações (ex: pergunta fora de tópico ou saudação)
+      await msg.reply(result.reply || "Pode repetir? Não consegui entender o item. 🤔");
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
