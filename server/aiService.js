@@ -10,58 +10,71 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null) {
-  let contents = [];
-  
-  const prompt = `Você é um assistente de mercado do app Lar360 conversando via WhatsApp.
-Sua missão é extrair as intenções do usuário (em áudio ou texto) sobre itens de estoque e mercado.
-Se o usuário quer COMPRAR / ANOTAR algo, é uma ação "add" com alvo "list".
-Se o usuário JÁ COMPROU / QUER GUARDAR no armário, é uma ação "add" com alvo "inventory".
-Se o usuário CONSUMIU / USOU / QUER REMOVER, é uma ação "remove" com alvo "inventory". (Se ele mandar remover da lista de compras, alvo "list").
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-Retorne EXATAMENTE um JSON na estrutura:
-{ 
+  const systemPrompt = `Você é um assistente inteligente de controle de estoque doméstico integrado ao WhatsApp.
+Sua tarefa é analisar mensagens (texto ou áudio transcrito) e identificar ações sobre itens.
+
+REGRAS:
+- Se o usuário quer COMPRAR, ADICIONAR À LISTA ou menciona que ACABOU algo → tipo "add", alvo "list"
+- Se o usuário JÁ COMPROU e quer GUARDAR no estoque → tipo "add", alvo "inventory"  
+- Se o usuário USOU, CONSUMIU ou quer REMOVER do estoque → tipo "remove", alvo "inventory"
+- Se pedir para remover da lista de compras → tipo "remove", alvo "list"
+
+EXEMPLOS:
+- "comprar leite" → add, list, Leite
+- "adicione arroz na lista" → add, list, Arroz
+- "acabou o sabão" → add, list, Sabão em Pó
+- "preciso de 2 pacotes de macarrão" → add, list, Macarrão, quantity: 2
+- "guardei o feijão" → add, inventory, Feijão
+- "usei o detergente" → remove, inventory, Detergente
+
+Responda APENAS com JSON válido, sem texto antes ou depois:
+{
   "actions": [
-    { 
-      "type": "add" ou "remove", 
-      "target": "list" ou "inventory", 
-      "item": { 
-        "name": "Nome padronizado do item (ex: Arroz, Detergente Líquido)", 
-        "category": "Escolha entre: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Congelados, Bebidas, Despensa, Higiene Pessoal, Limpeza, Pet Shop, Lanches e Snacks, Outros", 
-        "quantity": 1 
-      } 
+    {
+      "type": "add",
+      "target": "list",
+      "item": {
+        "name": "Nome do Item",
+        "category": "Categoria",
+        "quantity": 1
+      }
     }
   ]
-}`;
+}
 
-  contents.push({ text: prompt });
-
-  if (base64Audio && mimeType) {
-    contents.push({
-      inlineData: {
-        data: base64Audio,
-        mimeType: mimeType
-      }
-    });
-  }
-  
-  if (textData) {
-    contents.push({ text: `Mensagem textual extra do usuário: ` + textData });
-  }
+Categorias disponíveis: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Congelados, Bebidas, Despensa, Higiene Pessoal, Limpeza, Pet Shop, Lanches e Snacks, Outros`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    let parts = [];
+
+    // Adicionar áudio se existir
+    if (base64Audio && mimeType) {
+      parts.push({
+        inlineData: { data: base64Audio, mimeType }
+      });
+      parts.push({ text: `${systemPrompt}\n\nAnalise o áudio acima e extraia as ações.` });
+    } else {
+      // Apenas texto
+      parts.push({ text: `${systemPrompt}\n\nMensagem do usuário: "${textData}"` });
+    }
+
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: contents }],
+      contents: [{ role: 'user', parts }],
       generationConfig: {
         responseMimeType: "application/json",
+        temperature: 0.1 // Mais determinístico
       }
     });
+
+    const responseText = result.response.text();
+    console.log('🤖 IA retornou:', responseText);
     
-    const response = await result.response;
-    const text = response.text();
-    return JSON.parse(text || '{"actions":[]}');
+    const parsed = JSON.parse(responseText || '{"actions":[]}');
+    return parsed;
   } catch(e) {
-    console.error("AI Error processing message:", e);
+    console.error("❌ Erro da IA:", e.message);
     return { actions: [] };
   }
 }
