@@ -209,6 +209,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
 
   // Onboarding Phone State
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [needsPhoneOnboarding, setNeedsPhoneOnboarding] = useState(false);
   const [onboardPhone, setOnboardPhone] = useState('55');
   const [onboardName, setOnboardName] = useState('');
@@ -334,6 +335,7 @@ export default function App() {
         const isHardcodedAdmin = user.email?.toLowerCase() === 'thiago.orlandi1@gmail.com';
         if (doc.exists()) {
           const data = doc.data();
+          setUserProfile(data);
           setIsAdmin(!!data.isAdmin || isHardcodedAdmin);
           setIsApproved(!!data.isApproved || isHardcodedAdmin);
           
@@ -2349,26 +2351,26 @@ export default function App() {
                   {/* Status Card */}
                   <div className="bg-white border-2 border-primary/5 rounded-[32px] p-8 shadow-sm relative overflow-hidden">
                     <div className="absolute -top-4 -right-4 bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary/20 font-black text-4xl">
-                      {userDoc?.phone ? '✅' : '1'}
+                      {userProfile?.phone ? '✅' : '1'}
                     </div>
                     <h3 className="text-sm font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
                       <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-[10px]">
-                        {userDoc?.phone ? <Check size={12} /> : '1'}
+                        {userProfile?.phone ? <Check size={12} /> : '1'}
                       </span>
-                      {userDoc?.phone ? 'Conexão Ativa' : 'Seu Cadastro de Acesso'}
+                      {userProfile?.phone ? 'Conexão Ativa' : 'Seu Cadastro de Acesso'}
                     </h3>
                     
                     <div className="space-y-5">
-                      {userDoc?.phone ? (
+                      {userProfile?.phone ? (
                         <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 text-center">
                           <p className="text-[10px] font-black uppercase text-[#6B705C] mb-1 tracking-widest">Número Vinculado</p>
-                          <p className="text-2xl font-black text-primary">+{userDoc.phone}</p>
+                          <p className="text-2xl font-black text-primary">+{userProfile.phone}</p>
                           <p className="text-[9px] text-primary/60 font-medium mt-3 uppercase tracking-tight">O robô já reconhece suas mensagens automaticamente.</p>
                           <button 
                             onClick={() => {
                               // Reset phone partially to allow edit
-                              setOnboardPhone(userDoc.phone);
-                              setUserDoc(prev => ({ ...prev, phone: '' }));
+                              setOnboardPhone(userProfile.phone);
+                              setUserProfile(prev => ({ ...prev, phone: '' }));
                             }}
                             className="mt-5 text-[10px] font-black uppercase text-primary/40 hover:text-primary transition-all underline underline-offset-4"
                           >
