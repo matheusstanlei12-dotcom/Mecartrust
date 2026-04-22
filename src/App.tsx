@@ -1098,9 +1098,9 @@ export default function App() {
 
   // Initialize Gemini
   const ai = useMemo(() => {
-    const key = import.meta.env.VITE_GEMINI_API_KEY || '';
-    if (!key) console.warn("⚠️ VITE_GEMINI_API_KEY não encontrada no ambiente.");
-    return new GoogleGenerativeAI(key);
+    // Busca priorizando import.meta.env (Vite) e caindo para string vazia
+    const key = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+    return new GoogleGenerativeAI(key || 'DUMMY_KEY'); 
   }, []);
 
   useEffect(() => {
@@ -1458,7 +1458,7 @@ export default function App() {
   const shareViaWhatsApp = (itemsToShare: GroceryItem[], listName: string, total: number) => {
     const text = `🛒 *Lista de Compras: ${listName}*\n\n` + 
       itemsToShare.map(i => `${i.checked ? '✅' : '⬜'} ${i.name} - R$ ${i.prices[selectedStore]?.toFixed(2)}`).join('\n') +
-      `\n\n💰 *Total Estimado: R$ ${total.toFixed(2)}* (no ${selectedStore})`;
+      `\n\n💰 *Total Estimado: R$ ${(total || 0).toFixed(2)}* (no ${selectedStore})`;
     
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
@@ -2728,7 +2728,7 @@ export default function App() {
                               <p className="text-[10px] font-black text-[#6B705C]">{list.date}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xl font-black text-primary">R$ {list.total.toFixed(2)}</p>
+                              <p className="text-xl font-black text-primary">R$ {(list.total || 0).toFixed(2)}</p>
                               <p className="text-[9px] font-black uppercase text-accent tracking-widest">{list.store}</p>
                             </div>
                           </div>
@@ -3047,7 +3047,7 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <p className="text-lg font-black text-primary">R$ {finance.value.toFixed(2)}</p>
+                        <p className="text-lg font-black text-primary">R$ {(finance.value || 0).toFixed(2)}</p>
                         <button onClick={() => deleteFinance(finance.id)} className="text-error/30 hover:text-error transition-all opacity-0 group-hover:opacity-100">
                           <Trash2 size={16} />
                         </button>
@@ -3139,7 +3139,7 @@ export default function App() {
           
           <div className="space-y-4 flex-1 overflow-y-auto pr-1 custom-scrollbar">
             {stores.map(store => {
-              const total = (activeTab === 'lists' ? totalsByStore[store.name] : 0);
+              const total = (activeTab === 'lists' ? (totalsByStore[store.name] || 0) : 0);
               const isBest = activeTab === 'lists' && bestStore?.[0] === store.name && items.length > 0;
               const isSelected = activeTab === 'lists' && selectedStore === store.name;
               
@@ -3174,7 +3174,7 @@ export default function App() {
                   )}
                   {!isBest && activeTab === 'lists' && items.length > 0 && totalsByStore[store.name] > (bestStore?.[1] as number) && (
                     <div className="text-[9px] text-error font-black mt-1 uppercase">
-                      ✗ +{(((totalsByStore[store.name] / (bestStore?.[1] as number)) - 1) * 100).toFixed(0)}% mais caro
+                      ✗ +{(((totalsByStore[store.name] / ((bestStore?.[1] as number) || 1)) - 1) * 100).toFixed(0)}% mais caro
                     </div>
                   )}
                 </div>
