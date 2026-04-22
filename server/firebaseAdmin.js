@@ -1,81 +1,75 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import fs from 'fs';
+import admin from 'firebase-admin';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
-
-let db = null;
-
-export function initFirebase() {
-  let serviceAccount;
-
-  const firebaseEnv = process.env.FIREBASE_SERVICE_ACCOUNT || 
-                    process.env.CONTA_DE_SERVIÇO_FIREBASE || 
-                    process.env.CONTA_DE_SERVICO_FIREBASE;
-
-  if (firebaseEnv) {
+// Carregamento dinâmico da conta de serviço
+function initFirebase() {
+  const serviceAccountVar = process.env.CONTA_DE_SERVIÇO_FIREBASE || process.env.FIREBASE_SERVICE_ACCOUNT;
+  
+  if (serviceAccountVar) {
     try {
-      serviceAccount = JSON.parse(firebaseEnv);
+      const serviceAccount = JSON.parse(serviceAccountVar);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('✅ Firebase Admin inicializado via Variável de Ambiente.');
+      return admin.firestore();
     } catch (e) {
-      console.error('ERRO: FIREBASE_SERVICE_ACCOUNT inválido!');
-    }
-  } else if (fs.existsSync(serviceAccountPath)) {
-    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-  }
-
-  if (serviceAccount || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    try {
-      initializeApp({ credential: cert(serviceAccount) });
-      db = getFirestore();
-      console.log('✅ Firebase Admin OK');
-      return true;
-    } catch (err) {
-      console.error('❌ Erro Firebase:', err);
+      console.error('❌ Erro ao processar JSON da conta de serviço:', e.message);
     }
   }
 
-  console.warn('⚠️ Firebase não inicializado (chave ausente). Usando mock para permitir início do bot.');
-  // Mock do DB para o bot não travar no início, mas avisar ao usar
-  db = {
-    collection: (name) => ({
-      doc: (id) => ({
+  const localKeyPath = path.join(__dirname, 'serviceAccountKey.json');
+  if (fs.existsSync(localKeyPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(localKeyPath, 'utf8'));
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('✅ Firebase Admin inicializado via Arquivo Local.');
+    return admin.firestore();
+  }
+
+  console.warn('⚠️ Firebase não inicializado corretamente. Verifique as credenciais.');
+  // Retorna um objeto mockado básico para não travar o servidor se as chaves faltarem
+  return {
+    collection: () => ({
+      where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
+      doc: () => ({ 
         get: async () => ({ exists: false, data: () => ({}) }),
-        set: async () => { console.error(`❌ Erro: Tentativa de gravar em "${name}/${id}" sem Firebase configurado.`); },
-        update: async () => { console.error(`❌ Erro: Tentativa de atualizar "${name}/${id}" sem Firebase configurado.`); },
-        onSnapshot: () => (() => {}),
-        delete: async () => {}
+        set: async () => ({}),
+        update: async () => ({})
       }),
-      where: () => ({ get: async () => ({ empty: true, docs: [], forEach: () => {} }) }),
-      get: async () => ({ empty: true, docs: [], forEach: (cb) => { [].forEach(cb) } }),
-      onSnapshot: () => (() => {}),
-      add: async () => { console.error(`❌ Erro: Tentativa de adicionar em "${name}" sem Firebase configurado.`); }
+      get: async () => ({ empty: true, docs: [], forEach: () => {} })
     })
   };
-  return true;
 }
 
-export { db, FieldValue };
+const db = initFirebase();
+const FieldValue = admin.firestore.FieldValue;
 
-export async function processInventoryActions(phoneNumber, actionsArray) {
-  if (!db) return "Erro: Banco de dados não inicializado.";
-  
-  const cleanReceived = String(phoneNumber).replace(/\D/g, '');
-  console.log(`🔍 Buscando usuário para: ${cleanReceived}`);
+/**
+ * SALVAR AÇÕES NO FIREBASE
+ */
+export async function processInventoryActions(phone, actionsArray) {
+  if (!actionsArray || actionsArray.length === 0) return "Nenhuma ação para processar.";
 
-  // 1. Achar Usuário
+  // Limpar telefone (formato 55319...)
+  const cleanPhone = String(phone).replace(/\D/g, '');
+  const last8 = cleanPhone.slice(-8);
+
+  console.log(`🔍 Buscando usuário para o telefone: ${cleanPhone}`);
+
+  // 1. Achar o Usuário
   const usersSnap = await db.collection('users').get();
   let userDoc = null;
-  const last8 = cleanReceived.slice(-8);
 
   usersSnap.forEach(doc => {
     const data = doc.data();
-    const phoneInDb = String(data.whatsappId || data.phone || '').replace(/\D/g, '');
-    if (phoneInDb.endsWith(last8)) {
+    if (data.whatsappId === cleanPhone || (data.phone && String(data.phone).replace(/\D/g, '').endsWith(last8))) {
       userDoc = { id: doc.id, ...data };
     }
   });
@@ -88,118 +82,96 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
   const uid = userDoc.id;
   console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
 
-  // 2. Achar Residência atrelando o usuário
-  const resSnap = await db.collection('residences')
-    .where('members', 'array-contains', uid)
-    .get();
+  // 2. Achar Residência
+  const resSnap = await db.collection('residences').where('members', 'array-contains', uid).get();
 
   if (resSnap.empty) {
-    console.log('❌ Nenhuma residência encontrada para este UID.');
-    return "Você não está em nenhuma residência cadastrada no Lar 360.";
+    console.warn(`⚠️ Usuário ${uid} não pertence a nenhuma residência.`);
+    return "Você ainda não criou ou entrou em uma residência no aplicativo Lar 360.";
   }
 
-  // Pegar a residência (se houver mais de uma, pega a primeira)
   const residenceId = resSnap.docs[0].id;
   console.log(`🏠 Residência ativa: ${residenceId}`);
 
-  // 3. Processar ações
-  let listModified = false;
-  
-  // Tentar encontrar a melhor lista (preferencialmente 'Compras da Semana')
-  let listRef = db.collection(`residences/${residenceId}/lists`).doc('Compras da Semana');
-  let listDoc = await listRef.get();
-  
-  if (!listDoc.exists) {
-    // Se não existir, tenta buscar qualquer lista disponível para não falhar
-    const listsSnap = await db.collection(`residences/${residenceId}/lists`).limit(1).get();
-    if (!listsSnap.empty) {
-      listRef = listsSnap.docs[0].ref;
-      listDoc = await listRef.get();
-      console.log(`📋 Usando lista alternativa: ${listRef.id}`);
+  // 3. Achar a Melhor Lista
+  const listSnap = await db.collection(`residences/${residenceId}/lists`).get();
+  let listRef;
+  let listName = 'Compras da Semana';
+
+  if (listSnap.empty) {
+    console.log(`❕ Nenhuma lista encontrada. Criando padrão.`);
+    listRef = db.collection(`residences/${residenceId}/lists`).doc(listName);
+  } else {
+    // Tenta 'Compras da Semana', se não, pega a primeira q existir
+    const preferred = listSnap.docs.find(d => d.id === 'Compras da Semana');
+    if (preferred) {
+      listRef = preferred.ref;
+      listName = preferred.id;
     } else {
-      console.log(`📋 Criando nova lista: Compras da Semana`);
+      listRef = listSnap.docs[0].ref;
+      listName = listSnap.docs[0].id;
     }
   }
 
-  let items = listDoc.exists ? (listDoc.data().items || []) : [];
+  const listDoc = await listRef.get();
+  let listItems = listDoc.exists ? (listDoc.data().items || []) : [];
+  let listModified = false;
 
   for (const action of actionsArray) {
-    const target = String(action.target || '').toLowerCase();
-    const type = String(action.type || '').toLowerCase();
+    const target = String(action.target || 'list').toLowerCase();
+    const type = String(action.type || 'add').toLowerCase();
     const item = String(action.item || '').trim();
     const qty = Number(action.quantity) || 1;
     const category = action.category || 'Despensa';
 
     if (!item) continue;
-    console.log(`⚙️ Processando: [${type}] [${target}] ${item} (qty: ${qty})`);
 
-    if (target === 'list') {
-      const idx = items.findIndex(i => i.name.toLowerCase().trim() === item.toLowerCase().trim());
-      
+    if (target === 'list' || target === 'compras') {
+      const idx = listItems.findIndex(i => i.name.toLowerCase().trim() === item.toLowerCase().trim());
       if (type === 'add') {
         if (idx >= 0) {
-          const currentQty = Number(items[idx].quantity || 0);
-          items[idx].quantity = currentQty + qty;
+          listItems[idx].quantity = (Number(listItems[idx].quantity) || 0) + qty;
         } else {
-          items.push({
+          listItems.push({
             id: Math.random().toString(36).substr(2, 9),
             name: item,
             quantity: qty,
             unit: action.unit || 'un',
             category: category,
-            prices: {},
-            checked: false
+            checked: false,
+            prices: {}
           });
         }
         listModified = true;
       } else if (type === 'remove' && idx >= 0) {
-        items.splice(idx, 1);
+        listItems.splice(idx, 1);
         listModified = true;
       }
-    } 
-    else if (target === 'inventory') {
-      const invRef = db.collection(`residences/${residenceId}/inventory`);
-      const invSnap = await invRef.get();
-      const existing = invSnap.docs.find(d => d.data().name.toLowerCase().trim() === item.toLowerCase().trim());
-
-      if (type === 'add') {
-        if (existing) {
-          await invRef.doc(existing.id).update({ 
-            current: FieldValue.increment(qty),
-            updatedAt: FieldValue.serverTimestamp()
-          });
-        } else {
-          await invRef.add({ 
-            name: item, 
-            current: qty, 
-            min: 1, 
-            unit: action.unit || 'un',
-            updatedAt: FieldValue.serverTimestamp()
-          });
+    } else if (target === 'inventory' || target === 'estoque') {
+      try {
+        const invRef = db.collection(`residences/${residenceId}/inventory`);
+        const invSnap = await invRef.where('name', '==', item).get();
+        
+        if (type === 'add') {
+          if (!invSnap.empty) {
+            const current = Number(invSnap.docs[0].data().current || 0);
+            await invRef.doc(invSnap.docs[0].id).update({ current: current + qty });
+          } else {
+            await invRef.add({ name: item, current: qty, min: 1, unit: action.unit || 'un', category });
+          }
+        } else if (type === 'remove' && !invSnap.empty) {
+          const current = Number(invSnap.docs[0].data().current || 0);
+          await invRef.doc(invSnap.docs[0].id).update({ current: Math.max(0, current - qty) });
         }
-      } else if (type === 'remove') {
-        if (existing) {
-          const currentData = existing.data();
-          const currentVal = Number(currentData.current || 0);
-          const newVal = Math.max(0, currentVal - qty);
-          await invRef.doc(existing.id).update({ 
-            current: newVal,
-            updatedAt: FieldValue.serverTimestamp()
-          });
-        } else {
-          console.log(`⚠️ Item não encontrado no estoque para remover: ${item}`);
-        }
+      } catch (e) {
+        console.error('Erro no processamento de estoque:', e.message);
       }
     }
   }
 
   if (listModified) {
-    await listRef.set({ 
-      items, 
-      updatedAt: FieldValue.serverTimestamp() 
-    }, { merge: true });
+    await listRef.set({ items: listItems, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
 
-  console.log('✅ Ações processadas com sucesso!');
-  return "Tudo pronto! Já atualizei seu Lar 360 com os itens informados. 🏠✨";
+  return `Operação realizada com sucesso na lista "${listName}"! ✅`;
 }

@@ -579,10 +579,10 @@ export default function App() {
         Analise os gastos da residência atual para o mês presente.
         
         DADOS:
-        - Custos Fixos: R$ ${fixedCosts.toFixed(2)}
-        - Custos Variáveis: R$ ${varCosts.toFixed(2)}
-        - Estimativa de Compras Atuais: R$ ${groceryTotal.toFixed(2)}
-        - Total Geral: R$ ${(fixedCosts + varCosts + groceryTotal).toFixed(2)}
+        - Custos Fixos: R$ ${(fixedCosts ?? 0).toFixed(2)}
+        - Custos Variáveis: R$ ${(varCosts ?? 0).toFixed(2)}
+        - Estimativa de Compras Atuais: R$ ${(groceryTotal ?? 0).toFixed(2)}
+        - Total Geral: R$ ${((fixedCosts ?? 0) + (varCosts ?? 0) + (groceryTotal ?? 0)).toFixed(2)}
         - Lançamentos detalhados: ${details}
         
         OBJETIVO:
@@ -615,11 +615,11 @@ export default function App() {
       let storeTotal = 0;
       content += `SUPERMERCADO: ${store.name}\n`;
       (items || []).forEach(item => {
-        const price = item.prices?.[store.name] || 0;
+        const price = (item.prices?.[store.name] ?? 0);
         storeTotal += price;
         content += `- ${item.name.padEnd(25)} R$ ${price.toFixed(2)}\n`;
       });
-      content += `TOTAL ESTIMADO NESTA LOJA: R$ ${storeTotal.toFixed(2)}\n`;
+      content += `TOTAL ESTIMADO NESTA LOJA: R$ ${(storeTotal ?? 0).toFixed(2)}\n`;
       content += `------------------------------------------\n\n`;
     });
 
@@ -1457,7 +1457,7 @@ export default function App() {
 
   const shareViaWhatsApp = (itemsToShare: GroceryItem[], listName: string, total: number) => {
     const text = `🛒 *Lista de Compras: ${listName}*\n\n` + 
-      itemsToShare.map(i => `${i.checked ? '✅' : '⬜'} ${i.name} - R$ ${i.prices[selectedStore]?.toFixed(2)}`).join('\n') +
+      itemsToShare.map(i => `${i.checked ? '✅' : '⬜'} ${i.name} - R$ ${(i.prices[selectedStore] ?? 0).toFixed(2)}`).join('\n') +
       `\n\n💰 *Total Estimado: R$ ${(total || 0).toFixed(2)}* (no ${selectedStore})`;
     
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
