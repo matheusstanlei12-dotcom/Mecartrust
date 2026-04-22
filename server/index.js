@@ -214,7 +214,26 @@ async function sendWelcomeMessage(docId, user) {
   }
 }
 
-// ─── 8. PROCESSAR MENSAGENS RECEBIDAS ────────────────────────────────────────
+// ─── 8. BUSCAR USUÁRIO PELO TELEFONE ─────────────────────────────────────────
+async function getUserByPhone(phone) {
+  const cleanPhone = String(phone).replace(/\D/g, '');
+  
+  // Busca pelo whatsappId (ex: 5531973368101)
+  let snap = await db.collection('users').where('whatsappId', '==', cleanPhone).get();
+  if (!snap.empty) return snap.docs[0].data();
+  
+  // Fallback pelos últimos 8 dígitos do phone salvo
+  const allUsers = await db.collection('users').get();
+  const last8 = cleanPhone.slice(-8);
+  let found = null;
+  allUsers.forEach(doc => {
+    const d = doc.data();
+    if (d.phone && String(d.phone).slice(-8) === last8) found = d;
+  });
+  return found;
+}
+
+// ─── 9. PROCESSAR MENSAGENS RECEBIDAS ────────────────────────────────────────
 client.on('message', async (msg) => {
   const chat = await msg.getChat();
   if (chat.isGroup) return;
@@ -223,10 +242,39 @@ client.on('message', async (msg) => {
   const text = msg.body || '';
   console.log(`📨 Mensagem de +${authorPhone}: "${text}"`);
 
-  // Saudação simples
-  const greetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'];
+  // Buscar nome do usuário no banco
+  const userData = await getUserByPhone(authorPhone);
+  const firstName = userData?.name ? userData.name.split(' ')[0] : null;
+
+  // Saudações — resposta personalizada
+  const greetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'hi'];
   if (greetings.includes(text.trim().toLowerCase())) {
-    await msg.reply('Olá! 👋 Sou o assistente do *MercaTrust*!\nMe mande um *áudio* ou *texto* com o que está faltando em casa e eu organizo tudo na sua lista! 🛒');
+    const saudacao = firstName
+      ? `Olá, *${firstName}*! 👋 Que bom te ver por aqui!\n\n`
+      : `Olá! 👋 Bem-vindo ao *MercaTrust*!\n\n`;
+
+    await msg.reply(
+      saudacao +
+      `Sou seu assistente de compras inteligente. Veja o que posso fazer:\n\n` +
+      `🛒 *Adicionar à lista* — "Preciso de leite e arroz"\n` +
+      `🎤 *Por áudio* — Mande um áudio falando o que falta\n` +
+      `📦 *Registrar estoque* — "Guardei 2 pacotes de macarrão"\n` +
+      `❌ *Remover* — "Tirei o detergente do estoque"\n\n` +
+      `O que vamos fazer hoje? 😊`
+    );
+    return;
+  }
+
+  // "ajuda" ou "menu"
+  if (['ajuda', 'help', 'menu', '?'].includes(text.trim().toLowerCase())) {
+    await msg.reply(
+      `📋 *Comandos disponíveis:*\n\n` +
+      `🛒 Para *adicionar na lista*:\n_"Preciso de arroz, leite e sabão"_\n\n` +
+      `📦 Para *registrar no estoque*:\n_"Comprei 3 pacotes de macarrão"_\n\n` +
+      `❌ Para *remover do estoque*:\n_"Acabei o azeite"_\n\n` +
+      `🎤 Você também pode mandar *áudios*!\n\n` +
+      `_Acesse o app para ver sua lista completa_ 📱`
+    );
     return;
   }
 
@@ -238,10 +286,12 @@ client.on('message', async (msg) => {
     if (media && media.mimetype.includes('audio')) {
       audioBase64 = media.data;
       audioMime = media.mimetype;
-      await msg.reply('🎤 Ouvi seu áudio! Processando...');
+      const audioPre = firstName ? `🎤 Ouvi você, *${firstName}*! Processando...` : '🎤 Processando seu áudio...';
+      await msg.reply(audioPre);
     }
   } else {
-    await msg.reply('⏳ Processando...');
+    const textPre = firstName ? `⏳ Anotando isso, *${firstName}*...` : '⏳ Processando...';
+    await msg.reply(textPre);
   }
 
   try {
@@ -250,23 +300,31 @@ client.on('message', async (msg) => {
 
     if (result.actions && result.actions.length > 0) {
       const lista = result.actions.map(a => {
-        const icone = a.type === 'add' ? '✅' : '❌';
+        const icone = a.type === 'add' ? '✅' : '🗑️';
         const alvo = a.target === 'inventory' ? 'Estoque' : 'Lista de Compras';
-        return `${icone} ${a.item?.quantity || 1}x ${a.item?.name} → ${alvo}`;
+        return `${icone} ${a.item?.quantity || 1}x *${a.item?.name}* → ${alvo}`;
       }).join('\n');
 
       const dbResp = await processInventoryActions(authorPhone, result.actions);
-      await msg.reply(`Feito! 🎉\n\n${lista}\n\n${dbResp}`);
+      
+      const conclusao = firstName
+        ? `Feito, *${firstName}*! 🎉\n\n${lista}\n\n_${dbResp}_`
+        : `Feito! 🎉\n\n${lista}\n\n_${dbResp}_`;
+      
+      await msg.reply(conclusao);
     } else {
-      await msg.reply('Não entendi o item. Pode repetir? Exemplo: _"preciso de arroz e feijão"_ 🙏');
+      await msg.reply(
+        `Hmm, não consegui identificar nenhum item. 🤔\n\n` +
+        `Tente assim:\n_"Preciso de arroz e feijão"_ ou mande um 🎤 áudio!`
+      );
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
-    await msg.reply('Tive um probleminha. Tente novamente em instantes! 😅');
+    await msg.reply('Tive um probleminha técnico. Tente novamente em instantes! 😅');
   }
 });
 
-// ─── 9. INICIALIZAÇÃO DO ROBÔ ─────────────────────────────────────────────────
+// ─── 10. INICIALIZAÇÃO DO ROBÔ ────────────────────────────────────────────────
 function initBot() {
   // Limpar lock file se existir
   const lockFile = '/tmp/.wwebjs_auth/session/SingletonLock';
