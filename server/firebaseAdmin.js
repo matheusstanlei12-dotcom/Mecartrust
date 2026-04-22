@@ -19,23 +19,40 @@ export function initFirebase() {
       serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     } catch (e) {
       console.error('ERRO: FIREBASE_SERVICE_ACCOUNT inválido!');
-      return false;
     }
   } else if (fs.existsSync(serviceAccountPath)) {
     serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-  } else {
-    return false;
   }
 
-  try {
-    initializeApp({ credential: cert(serviceAccount) });
-    db = getFirestore();
-    console.log('✅ Firebase Admin OK');
-    return true;
-  } catch (err) {
-    console.error('❌ Erro Firebase:', err);
-    return false;
+  if (serviceAccount || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    try {
+      initializeApp({ credential: cert(serviceAccount) });
+      db = getFirestore();
+      console.log('✅ Firebase Admin OK');
+      return true;
+    } catch (err) {
+      console.error('❌ Erro Firebase:', err);
+    }
   }
+
+  console.warn('⚠️ Firebase não inicializado (chave ausente). Usando mock para permitir início do bot.');
+  // Mock do DB para o bot não travar no início, mas avisar ao usar
+  db = {
+    collection: (name) => ({
+      doc: (id) => ({
+        get: async () => ({ exists: false, data: () => ({}) }),
+        set: async () => { console.error(`❌ Erro: Tentativa de gravar em "${name}/${id}" sem Firebase configurado.`); },
+        update: async () => { console.error(`❌ Erro: Tentativa de atualizar "${name}/${id}" sem Firebase configurado.`); },
+        onSnapshot: () => (() => {}),
+        delete: async () => {}
+      }),
+      where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
+      get: async () => ({ empty: true, docs: [] }),
+      onSnapshot: () => (() => {}),
+      add: async () => { console.error(`❌ Erro: Tentativa de adicionar em "${name}" sem Firebase configurado.`); }
+    })
+  };
+  return true;
 }
 
 export { db, FieldValue };
@@ -84,21 +101,36 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
   // 3. Processar ações
   let listModified = false;
   
-  // Carregar lista de compras atual
-  const listRef = db.collection(`residences/${residenceId}/lists`).doc('Compras da Semana');
-  const listDoc = await listRef.get();
+  // Tentar encontrar a melhor lista (preferencialmente 'Compras da Semana')
+  let listRef = db.collection(`residences/${residenceId}/lists`).doc('Compras da Semana');
+  let listDoc = await listRef.get();
+  
+  if (!listDoc.exists) {
+    // Se não existir, tenta buscar qualquer lista disponível para não falhar
+    const listsSnap = await db.collection(`residences/${residenceId}/lists`).limit(1).get();
+    if (!listsSnap.empty) {
+      listRef = listsSnap.docs[0].ref;
+      listDoc = await listRef.get();
+      console.log(`📋 Usando lista alternativa: ${listRef.id}`);
+    } else {
+      console.log(`📋 Criando nova lista: Compras da Semana`);
+    }
+  }
+
   let items = listDoc.exists ? (listDoc.data().items || []) : [];
 
   for (const action of actionsArray) {
-    const { type, target, item, quantity, category: actionCategory } = action;
-    if (!item) continue;
+    const target = String(action.target || '').toLowerCase();
+    const type = String(action.type || '').toLowerCase();
+    const item = String(action.item || '').trim();
+    const qty = Number(action.quantity) || 1;
+    const category = action.category || 'Despensa';
 
-    const itemName = item.trim();
-    const qty = Number(quantity) || 1;
-    const category = actionCategory || 'Despensa';
+    if (!item) continue;
+    console.log(`⚙️ Processando: [${type}] [${target}] ${item} (qty: ${qty})`);
 
     if (target === 'list') {
-      const idx = items.findIndex(i => i.name.toLowerCase() === itemName.toLowerCase());
+      const idx = items.findIndex(i => i.name.toLowerCase().trim() === item.toLowerCase().trim());
       
       if (type === 'add') {
         if (idx >= 0) {
@@ -107,9 +139,9 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
         } else {
           items.push({
             id: Math.random().toString(36).substr(2, 9),
-            name: itemName,
+            name: item,
             quantity: qty,
-            unit: 'un',
+            unit: action.unit || 'un',
             category: category,
             prices: {},
             checked: false
@@ -124,20 +156,35 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
     else if (target === 'inventory') {
       const invRef = db.collection(`residences/${residenceId}/inventory`);
       const invSnap = await invRef.get();
-      const existing = invSnap.docs.find(d => d.data().name.toLowerCase() === itemName.toLowerCase());
+      const existing = invSnap.docs.find(d => d.data().name.toLowerCase().trim() === item.toLowerCase().trim());
 
       if (type === 'add') {
         if (existing) {
-          // Incrementa via Firestore (atômico)
-          await invRef.doc(existing.id).update({ current: FieldValue.increment(qty) });
+          await invRef.doc(existing.id).update({ 
+            current: FieldValue.increment(qty),
+            updatedAt: FieldValue.serverTimestamp()
+          });
         } else {
-          await invRef.add({ name: itemName, current: qty, min: 1, unit: 'un' });
+          await invRef.add({ 
+            name: item, 
+            current: qty, 
+            min: 1, 
+            unit: action.unit || 'un',
+            updatedAt: FieldValue.serverTimestamp()
+          });
         }
-      } else if (type === 'remove' && existing) {
-        const currentData = existing.data();
-        const currentVal = Number(currentData.current || 0);
-        const newVal = Math.max(0, currentVal - qty);
-        await invRef.doc(existing.id).update({ current: newVal });
+      } else if (type === 'remove') {
+        if (existing) {
+          const currentData = existing.data();
+          const currentVal = Number(currentData.current || 0);
+          const newVal = Math.max(0, currentVal - qty);
+          await invRef.doc(existing.id).update({ 
+            current: newVal,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        } else {
+          console.log(`⚠️ Item não encontrado no estoque para remover: ${item}`);
+        }
       }
     }
   }

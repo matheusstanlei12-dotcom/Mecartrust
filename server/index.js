@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
 const { Client, RemoteAuth } = pkg;
+import qrcode from 'qrcode-terminal';
 import express from 'express';
 import http from 'http';
 
@@ -133,15 +134,12 @@ const client = new Client({
     backupSyncIntervalMs: 300000 // Backup a cada 5 min
   }),
   puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process'
     ]
   }
 });
@@ -149,7 +147,9 @@ const client = new Client({
 client.on('qr', (qr) => {
   lastQr = qr;
   botReady = false;
-  console.log('📱 QR Code gerado! Acesse /qr para escanear.');
+  console.log('📱 QR Code gerado!');
+  qrcode.generate(qr, { small: true });
+  console.log('Acesse também /qr no navegador para escanear.');
 });
 
 client.on('authenticated', () => {
@@ -325,13 +325,17 @@ client.on('message', async (msg) => {
 
 // ─── 10. INICIALIZAÇÃO DO ROBÔ ────────────────────────────────────────────────
 function initBot() {
-  // Limpar lock file se existir
-  const lockFile = '/tmp/.wwebjs_auth/session/SingletonLock';
+  // Limpar lock file se existir para evitar erros de inicialização
+  const lockFile = path.join(__dirname, '../.wwebjs_auth/session/SingletonLock');
   if (fs.existsSync(lockFile)) {
-    try { fs.unlinkSync(lockFile); } catch(e) {}
-    console.log('🧹 Lock removido.');
+    try { 
+      fs.unlinkSync(lockFile); 
+      console.log('🧹 Lock do WhatsApp removido.');
+    } catch(e) {
+      console.log('⚠️ Não foi possível remover o lock (pode estar em uso).');
+    }
   }
-  console.log('🤖 Iniciando robô...');
+  console.log('🤖 Iniciando robô do WhatsApp...');
   client.initialize().catch(err => {
     console.error('💥 Erro ao iniciar robô:', err.message);
     // Tentar novamente em 30 segundos
