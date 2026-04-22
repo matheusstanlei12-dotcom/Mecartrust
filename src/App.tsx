@@ -2458,6 +2458,23 @@ export default function App() {
               </div>
             </div>
           )}
+          {activeTab === 'lists' && (
+            <>
+              {showFinished && (
+                <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-10 font-sans">
+                  <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
+                    <CheckCircle2 size={40} />
+                  </div>
+                  <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Lista Finalizada!</h2>
+                  <p className="text-[#6B705C] mt-2 mb-6">A lista foi salva em seu Histórico.</p>
+                  <button 
+                    onClick={() => shareViaWhatsApp(history[0]?.items || [], history[0]?.name || 'Lista', history[0]?.total || 0)}
+                    className="bg-[#25D366] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-md"
+                  >
+                    <MessageSquare size={18} /> Compartilhar Recibo
+                  </button>
+                </div>
+              )}
 
               {/* Mobile Submenu for Lists */}
               <div className="md:hidden flex items-center gap-2 overflow-x-auto pb-4 mb-4 custom-scrollbar whitespace-nowrap">
@@ -3326,6 +3343,7 @@ export default function App() {
         >
           <Home size={18} />
           <span className="text-[8px] font-black uppercase">Início</span>
+        </button>
         <button 
           onClick={() => setActiveTab('whatsapp')}
           className={`shrink-0 flex flex-col items-center gap-1 p-2 min-w-[60px] rounded-xl transition-all ${activeTab === 'whatsapp' ? 'text-[#25D366]' : 'text-[#6B705C] opacity-60'}`}
