@@ -223,7 +223,7 @@ client.on('message', async msg => {
   } else {
     // Se for só oi
     if (text.trim().toLowerCase() === 'oi' || text.trim().toLowerCase() === 'olá') {
-      msg.reply('Olá! Eu sou a inteligência artificial do Lar360 =)\nMe mande um áudio ou texto com os itens de mercado que estão faltando e eu guardarei no sistema!');
+      msg.reply('Olá! 👋 Eu sou o assistente do *MercaTrust*!\nMe mande um áudio ou texto com os itens que estão faltando em casa e eu organizo tudo no sistema pra você! 🛒');
       return;
     }
     msg.reply('Cadastrando itens no sistema, um momento...');
@@ -255,16 +255,18 @@ client.on('message', async msg => {
 
 // Lógica de "Insônia" - Mantém o robô acordado 24/7
 const keepAwake = () => {
-    const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    const SELF_URL = process.env.RAILWAY_PUBLIC_DOMAIN 
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+        : `http://localhost:${PORT}`;
     setInterval(async () => {
         try {
-            console.log(`⏰ [Keep-Awake] Cutucando servidor em: ${url}`);
-            await fetch(url);
+            await fetch(`${SELF_URL}/ping`);
+            console.log(`⏰ [Keep-Awake] Servidor ativo.`);
         } catch (err) {
-            console.error("❌ [Keep-Awake] Erro ao tentar se auto-cutucar:", err.message);
+            console.error('❌ [Keep-Awake] Erro:', err.message);
         }
     }, 10 * 60 * 1000); // A cada 10 minutos
 };
 
-client.initialize();
+// Iniciar keep-awake imediatamente
 keepAwake();
