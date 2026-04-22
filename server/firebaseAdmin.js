@@ -203,3 +203,5 @@ export async function processInventoryActions(phone, actionsArray) {
 
   return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa: *${resName}* (${inviteCode})`;
 }
+
+// Trigger: Fix precision and logs 2
