@@ -38,7 +38,8 @@ import {
   Download,
   ExternalLink,
   MapPin,
-  Check
+  Check,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
