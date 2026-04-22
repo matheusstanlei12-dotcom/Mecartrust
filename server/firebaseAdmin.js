@@ -96,7 +96,7 @@ export async function processInventoryActions(phone, actionsArray) {
 
   // 2. Achar a Residência (Sincronizado com a lógica do Site)
   // Procuro na coleção principal de residências onde o usuário é dono
-  const resSnap = await db.collection('residences').where('ownerUid', '==', uid).get();
+  const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
   let residenceId = null;
 
   if (!resSnap.empty) {
