@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth } = pkg;
+const { Client, RemoteAuth } = pkg;
 import express from 'express';
 import http from 'http';
 
@@ -11,6 +11,7 @@ const server_http = http.createServer(app_express);
 
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
 import { processInventoryMessage } from './aiService.js';
+import { FirestoreStore } from './sessionStore.js';
 
 // ─── 1. INICIALIZAR BANCO ────────────────────────────────────────────────────
 const hasDB = initFirebase();
@@ -126,9 +127,11 @@ server_http.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor Web rodando em 0.0.0.0:${PORT}`);
 });
 
-// ─── 6. CONFIGURAÇÃO DO ROBÔ ─────────────────────────────────────────────────
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: '/tmp/.wwebjs_auth' }),
+  authStrategy: new RemoteAuth({
+    store: new FirestoreStore(),
+    backupSyncIntervalMs: 300000 // Backup a cada 5 min
+  }),
   puppeteer: {
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
     args: [
