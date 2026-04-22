@@ -54,23 +54,22 @@ const FieldValue = admin.firestore.FieldValue;
 /**
  * SALVAR AÇÕES NO FIREBASE
  */
-export async function processInventoryActions(phone, actionsArray) {
-  if (!actionsArray || actionsArray.length === 0) return "Nenhuma ação para processar.";
-
-  // Normaliza o telefone do WhatsApp
-  const cleanPhone = String(phone).replace(/\D/g, '');
-  const searchSuffix = cleanPhone.slice(-7); // Usar 7 dígitos é o mais seguro contra erro de 9º dígito e DDD
-
+export async function processInventoryActions(phone, actions, choice = null) {
+  try {
     // 1. Achar o Usuário (Com Auto-Limpeza de duplicados)
     const usersSnap = await db.collection('users').get();
     let candidates = [];
     
+    // Normaliza o telefone do WhatsApp
+    const cleanPhoneInput = String(phone).replace(/\D/g, '');
+    const searchSuffixInput = cleanPhoneInput.slice(-7);
+
     usersSnap.forEach(doc => {
       const data = doc.data();
       const dbPhone = String(data.phone || '').replace(/\D/g, '');
       const dbWhId = String(data.whatsappId || '').replace(/\D/g, '');
       
-      if (dbPhone.endsWith(searchSuffix) || dbWhId.endsWith(searchSuffix)) {
+      if (dbPhone.endsWith(searchSuffixInput) || dbWhId.endsWith(searchSuffixInput)) {
         candidates.push({ id: doc.id, ...data, ref: doc.ref });
       }
     });
@@ -79,34 +78,41 @@ export async function processInventoryActions(phone, actionsArray) {
       return "Não encontrei sua conta. Por favor, cadastre seu número no site Lar 360 primeiro!";
     }
 
-    // Ordena: Primeiro os que tem activeResidenceId, depois por ID (mais novos tendem a ser melhores)
     candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
     const userDoc = candidates[0];
+    const uid = userDoc.id;
 
-    // Limpeza em background para não travar a resposta
-    if (candidates.length > 1) {
-      console.log(`🧹 [CLEANUP] Removendo ${candidates.length - 1} rastros duplicados.`);
-      for (let i = 1; i < candidates.length; i++) {
-        candidates[i].ref.delete().catch(() => {}); 
+    // 2. Achar a Residência
+    let residenceId = userDoc.activeResidenceId;
+    const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
+    const myResidences = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Tratamento de ESCOLHA (Se o usuário respondeu ao menu)
+    if (choice && myResidences.length > 1) {
+      const idx = parseInt(choice) - 1;
+      if (!isNaN(idx) && myResidences[idx]) {
+        residenceId = myResidences[idx].id;
+      } else {
+        // Tenta por nome
+        const foundByName = myResidences.find(r => r.name.toLowerCase().includes(choice.toLowerCase()));
+        if (foundByName) residenceId = foundByName.id;
+        else return "Não entendi sua escolha. Por favor, responda o número da opção (ex: 1).";
       }
     }
 
-    if (!userDoc) return "Erro interno ao localizar perfil.";
-    const uid = userDoc.id;
-    console.log(`👤 Usuário: ${userDoc.name} (${uid})`);
+    if (!residenceId) {
+      if (myResidences.length === 0) return "Você ainda não tem uma casa cadastrada. 🏠";
+      if (myResidences.length === 1) residenceId = myResidences[0].id;
+      else {
+        let options = myResidences.map((r, i) => `*[${i + 1}]* ${r.name} (${r.inviteCode || r.id.slice(0,5)})`).join('\n');
+        return `🏠 Você tem *${myResidences.length} casas* cadastradas.\n\nPara qual delas você quer enviar este item?\n\n${options}\n\n_Responda apenas o número da opção (ex: 1) ou o nome da casa._`;
+      }
+    }
 
-  // 2. Achar a Residência (OBRIGATÓRIA agora para evitar erros)
-  let residenceId = userDoc.activeResidenceId;
-
-  if (!residenceId) {
-    console.log(`❌ Usuário sem activeResidenceId vinculado.`);
-    return `Olá ${userDoc.name || 'usuário'}! 🏠 Percebi que você ainda não vinculou seu WhatsApp a uma casa específica.\n\nPor favor, acesse o site, vá na aba *Assistente WhatsApp* e clique em *Priorizar esta Casa* para que eu saiba onde salvar seus itens!`;
-  }
-
-  // Verifica se a residência ainda existe e se o usuário é membro
+  // Verifica se a residência ainda existe
   const resCheck = await db.collection('residences').doc(residenceId).get();
   if (!resCheck.exists) {
-    return `⚠️ A casa vinculada ao seu perfil não foi encontrada. Por favor, vincule novamente no site.`;
+    return `⚠️ A casa vinculada ao seu perfil não foi encontrada. Por favor, acesse o site e selecione uma casa válida.`;
   }
 
   console.log(`🏠 Residência validada: ${residenceId}`);
@@ -137,7 +143,7 @@ export async function processInventoryActions(phone, actionsArray) {
   let listItems = listDoc.exists ? (listDoc.data().items || []) : [];
   let listModified = false;
 
-  for (const action of actionsArray) {
+  for (const action of actions) {
     const target = String(action.target || 'list').toLowerCase();
     const type = String(action.type || 'add').toLowerCase();
     const item = String(action.item || '').trim();
@@ -203,6 +209,11 @@ export async function processInventoryActions(phone, actionsArray) {
   const inviteCode = resData?.inviteCode || '???';
 
   return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa: *${resName}* (${inviteCode})`;
+
+  } catch (err) {
+    console.error('💥 Erro em processInventoryActions:', err.message);
+    throw err;
+  }
 }
 
 // Trigger: Fix precision and logs 2

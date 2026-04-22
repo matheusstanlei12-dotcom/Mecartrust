@@ -2348,89 +2348,107 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Status Card */}
                   <div className="bg-white border-2 border-primary/5 rounded-[32px] p-8 shadow-sm relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary/20 font-black text-4xl">1</div>
+                    <div className="absolute -top-4 -right-4 bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary/20 font-black text-4xl">
+                      {userDoc?.phone ? '✅' : '1'}
+                    </div>
                     <h3 className="text-sm font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
-                      <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-[10px]">1</span>
-                      Seu Cadastro de Acesso
+                      <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-[10px]">
+                        {userDoc?.phone ? <Check size={12} /> : '1'}
+                      </span>
+                      {userDoc?.phone ? 'Conexão Ativa' : 'Seu Cadastro de Acesso'}
                     </h3>
                     
                     <div className="space-y-5">
-                      <div>
-                        <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">👤 Seu Nome no Chat</label>
-                        <input 
-                          type="text" 
-                          value={onboardName}
-                          onChange={(e) => setOnboardName(e.target.value)}
-                          className="w-full bg-[#f8f9fa] border border-border-main rounded-2xl py-3.5 px-4 focus:ring-2 focus:ring-primary transition-all font-bold"
-                          placeholder="Ex: Matheus"
-                        />
-                      </div>
+                      {userDoc?.phone ? (
+                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 text-center">
+                          <p className="text-[10px] font-black uppercase text-[#6B705C] mb-1 tracking-widest">Número Vinculado</p>
+                          <p className="text-2xl font-black text-primary">+{userDoc.phone}</p>
+                          <p className="text-[9px] text-primary/60 font-medium mt-3 uppercase tracking-tight">O robô já reconhece suas mensagens automaticamente.</p>
+                          <button 
+                            onClick={() => {
+                              // Reset phone partially to allow edit
+                              setOnboardPhone(userDoc.phone);
+                              setUserDoc(prev => ({ ...prev, phone: '' }));
+                            }}
+                            className="mt-5 text-[10px] font-black uppercase text-primary/40 hover:text-primary transition-all underline underline-offset-4"
+                          >
+                            Alterar Número de Telefone
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">👤 Seu Nome no Chat</label>
+                            <input 
+                              type="text" 
+                              value={onboardName}
+                              onChange={(e) => setOnboardName(e.target.value)}
+                              className="w-full bg-[#f8f9fa] border border-border-main rounded-2xl py-3.5 px-4 focus:ring-2 focus:ring-primary transition-all font-bold"
+                              placeholder="Ex: Matheus"
+                            />
+                          </div>
 
-                      <div>
-                        <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">📱 Seu WhatsApp (Obrigatório)</label>
-                        <input 
-                          type="tel" 
-                          value={onboardPhone}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '');
-                            if (val.startsWith('55')) setOnboardPhone(val);
-                            else if (val.length < 2) setOnboardPhone('55');
-                            else setOnboardPhone('55' + val);
-                          }}
-                          className="w-full bg-[#f8f9fa] border border-border-main rounded-2xl py-3.5 px-4 focus:ring-2 focus:ring-primary transition-all font-bold"
-                          placeholder="55 + DDD + Número"
-                        />
-                        <p className="text-[9px] text-primary font-black mt-2 uppercase tracking-tighter italic">⚠️ É este número que o robô irá reconhecer automaticamente.</p>
-                      </div>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-[#6B705C] mb-2 tracking-widest">📱 Seu WhatsApp (Obrigatório)</label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-primary/40 text-sm">55</span>
+                              <input 
+                                type="tel" 
+                                value={onboardPhone.startsWith('55') ? onboardPhone.slice(2) : onboardPhone}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  setOnboardPhone('55' + val);
+                                }}
+                                className="w-full bg-[#f8f9fa] border border-border-main rounded-2xl py-3.5 pl-10 pr-4 focus:ring-2 focus:ring-primary transition-all font-bold"
+                                placeholder="(DDD) Número"
+                              />
+                            </div>
+                            <p className="text-[9px] text-primary font-black mt-2 uppercase tracking-tighter italic">⚠️ Cadastro único. O 55 já está incluído.</p>
+                          </div>
 
-                      <button 
-                        onClick={saveOnboardPhone}
-                        disabled={onboardSaving || onboardPhone.length < 12}
-                        className="w-full bg-primary text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-opacity-90 disabled:opacity-50 shadow-lg shadow-primary/10 transition-all active:scale-95"
-                      >
-                        {onboardSaving ? <Loader2 className="animate-spin" /> : 'Confirmar Meus Dados'}
-                      </button>
+                          <button 
+                            onClick={saveOnboardPhone}
+                            disabled={onboardSaving || onboardPhone.length < 12}
+                            className="w-full bg-primary text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-opacity-90 disabled:opacity-50 shadow-lg shadow-primary/10 transition-all active:scale-95"
+                          >
+                            {onboardSaving ? <Loader2 className="animate-spin" /> : 'Confirmar Meus Dados'}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Sync Card */}
+                  {/* Sync Card - Now more informative than actionable */}
                   <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-[32px] p-8 shadow-sm flex flex-col relative overflow-hidden">
                     <div className="absolute -top-4 -right-4 bg-[#25D366]/10 w-24 h-24 rounded-full flex items-center justify-center text-[#25D366]/20 font-black text-4xl">2</div>
                     <div className="flex items-center gap-4 mb-6">
                       <div className="w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center text-[10px] font-black">2</div>
                       <div>
-                        <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Vincular à Residência</h3>
-                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Qual casa o robô deve atualizar?</p>
+                        <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Inteligência Multicasas</h3>
+                        <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">O robô agora pergunta para onde enviar!</p>
                       </div>
                     </div>
-
-                    <div className="flex-1 bg-white/60 rounded-3xl p-6 border border-white mb-6">
-                      <p className="text-xs text-[#333] leading-relaxed mb-4">
-                        Destino atual pelo robô: <br/>
-                        <span className="text-sm font-black text-[#25D366]">
-                          {residences.find(r => r.id === selectedResidenceId)?.name || 'Nenhuma selecionada'}
-                        </span>
-                      </p>
-                      <p className="text-[10px] text-[#6B705C] leading-relaxed">
-                        Ao clicar no botão abaixo, todas as mensagens que você enviar para a I.A. serão processadas e atualizadas na casa que você está visualizando agora.
-                      </p>
+                    
+                    <div className="space-y-4">
+                      <div className="bg-white/50 border border-[#25D366]/20 rounded-2xl p-5 mb-auto">
+                        <p className="text-xs text-[#333] leading-relaxed mb-4">
+                          Sua casa atual no site: <br/>
+                          <span className="text-sm font-black text-[#128C7E]">
+                            {residences.find(r => r.id === selectedResidenceId)?.name || 'Casa Principal'}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-[#6B705C] leading-relaxed">
+                          Se você tiver mais de uma residência, o robô irá perguntar no WhatsApp em qual delas você quer adicionar o item.
+                        </p>
+                      </div>
+                      
+                      <div className="bg-[#128C7E]/10 rounded-2xl p-4 flex items-start gap-3">
+                        <Zap size={16} className="text-[#128C7E] shrink-0 mt-1" />
+                        <p className="text-[10px] text-[#128C7E] font-bold leading-tight">
+                          O robô já está configurado para ler seu estoque e suas listas automaticamente.
+                        </p>
+                      </div>
                     </div>
-
-                    <button 
-                      onClick={async () => {
-                        if (user && selectedResidenceId) {
-                          try {
-                            await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: selectedResidenceId });
-                            alert('✅ Sucesso! Agora o robô está apontado para esta casa.');
-                          } catch (e) {
-                            alert('Erro ao vincular.');
-                          }
-                        }
-                      }}
-                      className="w-full bg-[#128C7E] text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#075E54] shadow-lg transition-all active:scale-95"
-                    >
-                      <RefreshCcw size={16} /> Priorizar esta Casa
-                    </button>
                   </div>
                 </div>
 

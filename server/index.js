@@ -299,7 +299,25 @@ client.on('message', async (msg) => {
     await msg.reply(textPre);
   }
 
-  try {
+    // --- LÓGICA DE SESSÃO / ESCOLHA DE CASA ---
+    if (userData && (text.trim().length <= 2 || text.toLowerCase().includes('casa'))) {
+      const sessionSnap = await db.collection('sessions').doc(authorPhone).get();
+      if (sessionSnap.exists) {
+        const session = sessionSnap.data();
+        if (session.type === 'residence_choice' && session.pendingActions) {
+          console.log(`🔢 Processando escolha de casa: ${text}`);
+          // Processa a escolha (passando o texto da escolha)
+          const dbStatus = await processInventoryActions(authorPhone, session.pendingActions, text.trim());
+          
+          if (!dbStatus.includes('escolher a casa')) {
+             await db.collection('sessions').doc(authorPhone).delete(); // Limpa sessão se resolveu
+             await msg.reply(dbStatus);
+             return;
+          }
+        }
+      }
+    }
+
     const result = await processInventoryMessage(text, audioBase64, audioMime, firstName);
     console.log('🤖 IA:', JSON.stringify(result));
 
@@ -308,9 +326,15 @@ client.on('message', async (msg) => {
       const dbStatus = await processInventoryActions(authorPhone, result.actions);
       console.log('📊 Status DB:', dbStatus);
       
-      // Se o banco retornar um erro conhecido (ex: não achou usuário), avisa o usuário.
-      // Caso contrário, usa o texto amigável da IA.
-      // Retorna o status real do banco de dados (que inclui o ID da Casa e Nome da Lista)
+      // Se o banco pediu para escolher a casa, salva em sessão
+      if (dbStatus.includes('escolher a casa')) {
+        await db.collection('sessions').doc(authorPhone).set({
+          type: 'residence_choice',
+          pendingActions: result.actions,
+          createdAt: new Date()
+        });
+      }
+
       await msg.reply(dbStatus || result.reply || "Tudo certo! Já organizei isso para você. ✅");
     } else {
       // Se não houver ações (ex: pergunta fora de tópico ou saudação)
