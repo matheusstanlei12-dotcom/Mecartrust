@@ -103,13 +103,19 @@ client.on('qr', (qr) => {
 // Rota /qr removida daqui (movida para cima)
 
 // Iniciar robô em segundo plano, DEPOIS que o servidor web já respondeu
-// Isso evita que a Railway desligue tudo achando que o servidor travou
 setTimeout(() => {
+    // Limpar arquivo de trava do Chrome de sessões anteriores que travaram
+    const lockFile = path.join(__dirname, '../.wwebjs_auth/session/SingletonLock');
+    if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+        console.log('🧹 Arquivo de trava do Chrome removido.');
+    }
+    
     console.log('🤖 Iniciando motor do robô em segundo plano...');
     client.initialize().catch(err => {
         console.error('💥 ERRO AO INICIAR ROBÔ:', err.message);
     });
-}, 5000); // 5 segundos de delay para o servidor web estabilizar
+}, 5000);
 
 client.on('ready', () => {
     lastQr = null; 
