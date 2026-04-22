@@ -11,10 +11,6 @@ const GEMINI_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY
 const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null, userName = '') {
-  const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash'
-  });
-
   const systemPrompt = `Você é o assistente inteligente "Lar 360", especialista em organização doméstica.
 Sua missão é ajudar ${userName || 'o usuário'} a gerenciar a lista de compras e o estoque da casa.
 
@@ -42,23 +38,40 @@ ESTRUTURA JSON:
   ]
 }`;
 
-  try {
-    let parts = [{ text: systemPrompt }];
-    if (base64Audio && mimeType) {
-      parts.push({ inlineData: { data: base64Audio, mimeType } });
-      parts.push({ text: "O áudio acima contém uma instrução para o Lar 360. Identifique os itens e ações." });
-    } else {
-      parts.push({ text: textData });
-    }
+  const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro'];
+  let result = null;
+  let lastError = null;
 
-    console.log('🤖 Chamando Gemini...');
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts }],
-      generationConfig: { 
-        temperature: 0,
-        responseMimeType: "application/json" 
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`🤖 Tentando modelo: ${modelName}...`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      
+      let parts = [{ text: systemPrompt }];
+      if (base64Audio && mimeType) {
+        parts.push({ inlineData: { data: base64Audio, mimeType } });
+        parts.push({ text: "O áudio acima contém uma instrução para o Lar 360. Identifique os itens e ações." });
+      } else {
+        parts.push({ text: textData });
       }
-    });
+
+      result = await model.generateContent({
+        contents: [{ role: 'user', parts }],
+        generationConfig: { 
+          temperature: 0,
+          responseMimeType: "application/json" 
+        }
+      });
+
+      if (result && result.response) break;
+    } catch (e) {
+      console.warn(`⚠️ Falha no modelo ${modelName}:`, e.message);
+      lastError = e;
+    }
+  }
+
+  try {
+    if (!result) throw lastError || new Error("Nenhum modelo disponível no momento");
 
     const responseText = result.response.text();
     console.log('🤖 Resposta da IA:', responseText);
