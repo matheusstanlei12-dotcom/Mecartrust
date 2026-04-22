@@ -310,7 +310,11 @@ client.on('message', async (msg) => {
 
   try {
     // --- LÓGICA DE SESSÃO / ESCOLHA DE CASA ---
-    if (userData && (text.trim().length <= 2 || text.toLowerCase().includes('casa'))) {
+    const isShortChoice = text.trim().length <= 2;
+    const isInviteCode = text.trim().length === 6;
+    const isCasaMention = text.toLowerCase().includes('casa');
+
+    if (userData && (isShortChoice || isInviteCode || isCasaMention)) {
       const sessionSnap = await db.collection('sessions').doc(authorPhone).get();
       if (sessionSnap.exists) {
         const session = sessionSnap.data();
