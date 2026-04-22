@@ -1098,8 +1098,9 @@ export default function App() {
 
   // Initialize Gemini
   const ai = useMemo(() => {
-    // Busca priorizando import.meta.env (Vite) e caindo para string vazia
+    // Busca priorizando VITE_GEMINI_API_KEY do build e tenta remover espaços extras
     const key = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+    if (!key) console.warn("⚠️ VITE_GEMINI_API_KEY não encontrada no build.");
     return new GoogleGenerativeAI(key || 'DUMMY_KEY'); 
   }, []);
 
