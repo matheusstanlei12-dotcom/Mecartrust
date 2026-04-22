@@ -210,7 +210,7 @@ export default function App() {
 
   // Onboarding Phone State
   const [needsPhoneOnboarding, setNeedsPhoneOnboarding] = useState(false);
-  const [onboardPhone, setOnboardPhone] = useState('');
+  const [onboardPhone, setOnboardPhone] = useState('55');
   const [onboardName, setOnboardName] = useState('');
   const [onboardSaving, setOnboardSaving] = useState(false);
 
@@ -1568,9 +1568,19 @@ export default function App() {
             <input 
               type="tel" 
               value={onboardPhone}
-              onChange={(e) => setOnboardPhone(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '');
+                // Impede apagar o 55 inicial
+                if (val.startsWith('55')) {
+                  setOnboardPhone(val);
+                } else if (val.length < 2) {
+                  setOnboardPhone('55');
+                } else {
+                  setOnboardPhone('55' + val);
+                }
+              }}
               className="w-full bg-[#f8f9fa] border border-border-main rounded-xl py-4 px-5 focus:outline-none focus:ring-2 focus:ring-primary transition-all font-medium text-lg"
-              placeholder="DDD + Número"
+              placeholder="55 + DDD + Número"
             />
           </div>
 
