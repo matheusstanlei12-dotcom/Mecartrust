@@ -318,7 +318,7 @@ client.on('message', async (msg) => {
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
-    await msg.reply('Tive um probleminha técnico. Tente novamente em instantes! 😅');
+    await msg.reply(`Tive um probleminha técnico: *${err.message}*. Tente novamente em instantes! 😅`);
   }
 });
 
