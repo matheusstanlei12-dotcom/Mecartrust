@@ -89,16 +89,25 @@ export async function processInventoryActions(phone, actionsArray) {
   const uid = userDoc.id;
   console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
 
-  // 2. Achar Residência
-  const resSnap = await db.collection('residences').where('members', 'array-contains', uid).get();
+  // 2. Achar a Residência (Sincronizado com a lógica do Site)
+  // Procuro na coleção principal de residências onde o usuário é dono
+  const resSnap = await db.collection('residences').where('ownerUid', '==', uid).get();
+  let residenceId = null;
 
-  if (resSnap.empty) {
-    console.warn(`⚠️ Usuário ${uid} não pertence a nenhuma residência.`);
-    return "Você ainda não criou ou entrou em uma residência no aplicativo Lar 360.";
+  if (!resSnap.empty) {
+    residenceId = resSnap.docs[0].id;
+  } else {
+    // Fallback: Tenta achar onde ele é apenas um membro (caso não seja o dono)
+    const subResSnap = await db.collection(`users/${uid}/residences`).get();
+    if (!subResSnap.empty) {
+      residenceId = subResSnap.docs[0].id;
+    }
   }
 
-  const residenceId = resSnap.docs[0].id;
-  console.log(`🏠 Residência ativa: ${residenceId}`);
+  if (!residenceId) {
+    return "Você ainda não tem uma casa cadastrada no Lar 360. Crie uma casa no app primeiro!";
+  }
+  console.log(`🏠 Residência encontrada: ${residenceId}`);
 
   // 3. Achar a Melhor Lista
   const listSnap = await db.collection(`residences/${residenceId}/lists`).get();
@@ -179,8 +188,11 @@ export async function processInventoryActions(phone, actionsArray) {
   }
 
   if (listModified) {
-    await listRef.set({ items: listItems, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await listRef.set({ 
+      items: listItems, 
+      updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+    }, { merge: true });
   }
 
-  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"*\n🏠 Casa ID: \`${residenceId}\``;
+  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa ID: \`${residenceId}\``;
 }
