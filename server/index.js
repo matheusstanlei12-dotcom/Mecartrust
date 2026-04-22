@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
-const { Client, RemoteAuth } = pkg;
+const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
 import express from 'express';
 import http from 'http';
@@ -129,12 +129,13 @@ server_http.listen(PORT, '0.0.0.0', () => {
 });
 
 const client = new Client({
-  authStrategy: new RemoteAuth({
-    clientId: 'lar360-bot',
-    store: new FirestoreStore(),
-    backupSyncIntervalMs: 300000 // Backup a cada 5 min
+  authStrategy: new LocalAuth({
+    clientId: 'lar360-bot'
   }),
   puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
+                    (fs.existsSync('/usr/bin/google-chrome-stable') ? '/usr/bin/google-chrome-stable' : 
+                     fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined),
     headless: true,
     args: [
       '--no-sandbox',
