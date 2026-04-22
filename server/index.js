@@ -298,7 +298,7 @@ client.on('message', async (msg) => {
   }
 
   try {
-    const result = await processInventoryMessage(text, audioBase64, audioMime);
+    const result = await processInventoryMessage(text, audioBase64, audioMime, firstName);
     console.log('🤖 IA:', JSON.stringify(result));
 
     if (result.actions && result.actions.length > 0) {

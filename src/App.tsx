@@ -1097,7 +1097,11 @@ export default function App() {
   };
 
   // Initialize Gemini
-  const ai = useMemo(() => new GoogleGenerativeAI(process.env.GEMINI_API_KEY || ''), []);
+  const ai = useMemo(() => {
+    const key = import.meta.env.VITE_GEMINI_API_KEY || '';
+    if (!key) console.warn("⚠️ VITE_GEMINI_API_KEY não encontrada no ambiente.");
+    return new GoogleGenerativeAI(key);
+  }, []);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -1470,7 +1474,7 @@ export default function App() {
       name: activeList,
       date: new Date().toLocaleString('pt-BR'),
       items: [...items],
-      total: totalsByStore[selectedStore],
+      total: totalsByStore[selectedStore] || 0,
       store: selectedStore
     };
 
@@ -2414,7 +2418,7 @@ export default function App() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-[#666] uppercase tracking-wider opacity-60">Estimativa Total</p>
-                  <p className="text-3xl font-black text-primary">R$ {totalsByStore[selectedStore].toFixed(2)}</p>
+                  <p className="text-3xl font-black text-primary">R$ {(totalsByStore[selectedStore] || 0).toFixed(2)}</p>
                 </div>
               </div>
 

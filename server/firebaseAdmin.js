@@ -102,7 +102,8 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
       
       if (type === 'add') {
         if (idx >= 0) {
-          items[idx].quantity += qty;
+          const currentQty = Number(items[idx].quantity || 0);
+          items[idx].quantity = currentQty + qty;
         } else {
           items.push({
             id: Math.random().toString(36).substr(2, 9),
@@ -127,13 +128,15 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
 
       if (type === 'add') {
         if (existing) {
+          // Incrementa via Firestore (atômico)
           await invRef.doc(existing.id).update({ current: FieldValue.increment(qty) });
         } else {
           await invRef.add({ name: itemName, current: qty, min: 1, unit: 'un' });
         }
       } else if (type === 'remove' && existing) {
         const currentData = existing.data();
-        const newVal = Math.max(0, (currentData.current || 0) - qty);
+        const currentVal = Number(currentData.current || 0);
+        const newVal = Math.max(0, currentVal - qty);
         await invRef.doc(existing.id).update({ current: newVal });
       }
     }
