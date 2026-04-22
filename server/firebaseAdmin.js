@@ -94,37 +94,21 @@ export async function processInventoryActions(phone, actionsArray) {
   const uid = userDoc.id;
   console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
 
-  // 2. Achar a Residência (Prioriza a que está ativa no SITE agora)
+  // 2. Achar a Residência (OBRIGATÓRIA agora para evitar erros)
   let residenceId = userDoc.activeResidenceId;
-  
-  if (residenceId) {
-    console.log(`📍 Usando residência ativa vinculada ao perfil: ${residenceId}`);
-  } else {
-    console.log(`🔍 Buscando residências onde o usuário é dono...`);
-    const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
-    
-    if (!resSnap.empty) {
-      // Prioridade 1: Tenta achar uma que se chame "Casa" ou "casa" (Case Insensitive)
-      const mainCasa = resSnap.docs.find(d => 
-        d.data().name.toLowerCase().trim() === 'casa'
-      );
-      residenceId = mainCasa ? mainCasa.id : resSnap.docs[0].id;
-      console.log(`🏠 Residência encontrada via busca (${mainCasa ? 'Nome Protetor' : 'Fallback'}): ${residenceId}`);
-    } else {
-      // Fallback: Tenta achar onde ele é apenas um membro
-      console.log(`🔍 Fallback: Buscando residências como membro...`);
-      const subResSnap = await db.collection(`users/${uid}/residences`).get();
-      if (!subResSnap.empty) {
-        residenceId = subResSnap.docs[0].id;
-        console.log(`🏠 Residência (membro) encontrada: ${residenceId}`);
-      }
-    }
-  }
 
   if (!residenceId) {
-    return "Você ainda não tem uma casa cadastrada no Lar 360. Crie uma casa no app primeiro!";
+    console.log(`❌ Usuário sem activeResidenceId vinculado.`);
+    return `Olá ${userDoc.name || 'usuário'}! 🏠 Percebi que você ainda não vinculou seu WhatsApp a uma casa específica.\n\nPor favor, acesse o site, vá na aba *Assistente WhatsApp* e clique em *Priorizar esta Casa* para que eu saiba onde salvar seus itens!`;
   }
-  console.log(`🏠 Residência encontrada: ${residenceId}`);
+
+  // Verifica se a residência ainda existe e se o usuário é membro
+  const resCheck = await db.collection('residences').doc(residenceId).get();
+  if (!resCheck.exists) {
+    return `⚠️ A casa vinculada ao seu perfil não foi encontrada. Por favor, vincule novamente no site.`;
+  }
+
+  console.log(`🏠 Residência validada: ${residenceId}`);
 
   // 3. Achar a Melhor Lista
   const listSnap = await db.collection(`residences/${residenceId}/lists`).get();
