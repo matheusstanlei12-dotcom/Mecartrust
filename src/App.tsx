@@ -59,6 +59,7 @@ import {
   getFirestore, 
   collection, 
   doc, 
+  getDoc,
   onSnapshot, 
   setDoc, 
   updateDoc, 
@@ -869,7 +870,6 @@ export default function App() {
     try {
       if (isSignUp) {
         const result = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-        // First user is the admin (or the user known to the system)
         const isFirstAdmin = authEmail.toLowerCase() === 'thiago.orlandi1@gmail.com';
 
         await setDoc(doc(db, 'users', result.user.uid), {
@@ -879,6 +879,11 @@ export default function App() {
           isApproved: isFirstAdmin,
           createdAt: serverTimestamp()
         }, { merge: true });
+
+        // Novo usuário: pedir nome e telefone imediatamente
+        if (!isFirstAdmin) {
+          setNeedsPhoneOnboarding(true);
+        }
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
@@ -902,6 +907,10 @@ export default function App() {
       const userRef = doc(db, 'users', result.user.uid);
       const isFirstAdmin = result.user.email?.toLowerCase() === 'thiago.orlandi1@gmail.com';
       
+      // Verificar se já tem telefone cadastrado
+      const userSnap = await getDoc(userRef);
+      const isNewUser = !userSnap.exists() || !userSnap.data()?.phone;
+
       await setDoc(userRef, {
         uid: result.user.uid,
         email: result.user.email,
@@ -909,6 +918,11 @@ export default function App() {
         isApproved: isFirstAdmin,
         createdAt: serverTimestamp()
       }, { merge: true });
+
+      // Se não tem telefone ainda, pedir agora
+      if (isNewUser && !isFirstAdmin) {
+        setNeedsPhoneOnboarding(true);
+      }
     } catch (error: any) {
       console.error(error);
       setAuthError("Erro no Google: " + error.message);
