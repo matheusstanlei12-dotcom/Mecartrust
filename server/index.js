@@ -154,10 +154,8 @@ setTimeout(() => {
 
 client.on('ready', () => {
     lastQr = null; 
-    console.log('✅ Cliente do WhatsApp conectado!');
-    
-    // Iniciar ouvinte para disparar boas vindas
-    console.log('👀 Ouvindo por novos cadastros...');
+    console.log('✅ ROBÔ CONECTADO E PRONTO! WhatsApp funcionando.');
+    console.log('👀 Ouvindo por novos cadastros e mensagens...');
     db.collection('users').onSnapshot((snapshot) => {
       snapshot.docChanges().forEach(async (change) => {
         if (change.type === 'added' || change.type === 'modified') {
