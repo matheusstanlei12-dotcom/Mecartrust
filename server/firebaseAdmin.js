@@ -14,39 +14,26 @@ let db = null;
 export function initFirebase() {
   let serviceAccount;
 
-  // 1. Tentar ler da variável de ambiente (Prod)
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {
       serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     } catch (e) {
-      console.error('ERRO: Variável FIREBASE_SERVICE_ACCOUNT não é um JSON válido!');
+      console.error('ERRO: FIREBASE_SERVICE_ACCOUNT inválido!');
       return false;
     }
-  } 
-  // 2. Tentar ler do arquivo local (Dev)
-  else if (fs.existsSync(serviceAccountPath)) {
+  } else if (fs.existsSync(serviceAccountPath)) {
     serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-  } 
-  // 3. Falha Total
-  else {
-    console.error('====================================================');
-    console.error('ERRO: Credenciais do Firebase não encontradas!');
-    console.error('Localmente: Crie server/serviceAccountKey.json');
-    console.error('Na Nuvem: Adicione a variável FIREBASE_SERVICE_ACCOUNT');
-    console.error('====================================================');
+  } else {
     return false;
   }
 
   try {
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-
+    initializeApp({ credential: cert(serviceAccount) });
     db = getFirestore();
-    console.log('Firebase Admin inicializado com sucesso.');
+    console.log('✅ Firebase Admin OK');
     return true;
   } catch (err) {
-    console.error('Erro ao inicializar Firebase Admin:', err);
+    console.error('❌ Erro Firebase:', err);
     return false;
   }
 }
@@ -54,121 +41,111 @@ export function initFirebase() {
 export { db, FieldValue };
 
 export async function processInventoryActions(phoneNumber, actionsArray) {
-  if (!db) return "Banco não conectado.";
+  if (!db) return "Erro: Banco de dados não inicializado.";
   
-  // 1. Achar usuário pelo telefone
-  const usersRef = db.collection('users');
-  const cleanPhone = phoneNumber.replace(/\D/g, ''); 
-  
-  // Tentar casamento direto primeiro pelo ID salvo pelo robô
-  let userQuery = await usersRef.where('whatsappId', '==', cleanPhone).get();
-  
-  // Se não achar, faz fallback buscando todos e mapenado os ultimos 8 digitos
-  let uid = null;
-  if (!userQuery.empty) {
-    uid = userQuery.docs[0].id;
-  } else {
-    // Fallback: carregar usuarios que tenham telefone para match agressivo
-    const allUsers = await usersRef.get();
-    const targetLast8 = cleanPhone.slice(-8);
-    
-    allUsers.forEach(doc => {
-      const data = doc.data();
-      if (data.phone && data.phone.slice(-8) === targetLast8) {
-         uid = doc.id;
-      }
-    });
+  const cleanReceived = String(phoneNumber).replace(/\D/g, '');
+  console.log(`🔍 Buscando usuário para: ${cleanReceived}`);
+
+  // 1. Achar Usuário
+  const usersSnap = await db.collection('users').get();
+  let userDoc = null;
+  const last8 = cleanReceived.slice(-8);
+
+  usersSnap.forEach(doc => {
+    const data = doc.data();
+    const phoneInDb = String(data.whatsappId || data.phone || '').replace(/\D/g, '');
+    if (phoneInDb.endsWith(last8)) {
+      userDoc = { id: doc.id, ...data };
+    }
+  });
+
+  if (!userDoc) {
+    console.log('❌ Usuário não encontrado no banco.');
+    return "Não encontrei nenhuma conta com seu número. Cadastre o telefone no app primeiro!";
   }
 
-  if (!uid) {
-    console.log(`Nenhum usuário encontrado com o telefone (ou fallback) semelhante a ${cleanPhone}`);
-    return "Não encontrei nenhuma conta associada a este número. Por favor, cadastre seu telefone no App primeiro.";
-  }
+  const uid = userDoc.id;
+  console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
 
-  // 2. Achar a residencia desse usuário
-  const resQuery = await db.collection('residences')
+  // 2. Achar Residência atrelando o usuário
+  const resSnap = await db.collection('residences')
     .where('members', 'array-contains', uid)
     .get();
 
-  if (resQuery.empty) {
-    return "Você ainda não participa de nenhuma residência ativa no sistema.";
+  if (resSnap.empty) {
+    console.log('❌ Nenhuma residência encontrada para este UID.');
+    return "Você não está em nenhuma residência cadastrada no Lar 360.";
   }
 
-  const residenceId = resQuery.docs[0].id;
+  // Pegar a residência (se houver mais de uma, pega a primeira)
+  const residenceId = resSnap.docs[0].id;
+  console.log(`🏠 Residência ativa: ${residenceId}`);
+
+  // 3. Processar ações
+  let listModified = false;
   
-  let totalProcessed = 0;
-  
-  // Setup Lists
+  // Carregar lista de compras atual
   const listRef = db.collection(`residences/${residenceId}/lists`).doc('Compras da Semana');
   const listDoc = await listRef.get();
-  let listItems = listDoc.exists ? (listDoc.data().items || []) : [];
-  let listModified = false;
-
-  // Setup Inventory
-  const inventoryRef = db.collection(`residences/${residenceId}/inventory`);
-  const inventorySnapshot = await inventoryRef.get();
-  const inventoryDocs = inventorySnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+  let items = listDoc.exists ? (listDoc.data().items || []) : [];
 
   for (const action of actionsArray) {
-    const { type, target, item: itemData } = action;
-    if (!itemData || !itemData.name) continue;
-    const q = itemData.quantity || 1;
+    const { type, target, item } = action;
+    if (!item?.name) continue;
 
-    if (target === 'list' || target === undefined) {
-      const existingIndex = listItems.findIndex(i => i.name.toLowerCase().includes(itemData.name.toLowerCase()));
+    const itemName = item.name.trim();
+    const qty = Number(item.quantity) || 1;
+    const category = item.category || 'Despensa';
+
+    if (target === 'list') {
+      const idx = items.findIndex(i => i.name.toLowerCase() === itemName.toLowerCase());
       
       if (type === 'add') {
-        if (existingIndex >= 0) {
-          listItems[existingIndex].quantity += q;
+        if (idx >= 0) {
+          items[idx].quantity += qty;
         } else {
-          listItems.push({
+          items.push({
             id: Math.random().toString(36).substr(2, 9),
-            name: itemData.name,
-            quantity: q,
+            name: itemName,
+            quantity: qty,
             unit: 'un',
-            category: itemData.category || 'Outros',
+            category: category,
             prices: {},
             checked: false
           });
         }
-      } else if (type === 'remove') {
-        if (existingIndex >= 0) {
-          listItems[existingIndex].quantity -= q;
-          if (listItems[existingIndex].quantity <= 0) {
-            listItems.splice(existingIndex, 1);
-          }
-        }
+        listModified = true;
+      } else if (type === 'remove' && idx >= 0) {
+        items.splice(idx, 1);
+        listModified = true;
       }
-      listModified = true;
-      totalProcessed++;
     } 
     else if (target === 'inventory') {
-      const existingDoc = inventoryDocs.find(d => d.name.toLowerCase().includes(itemData.name.toLowerCase()));
+      const invRef = db.collection(`residences/${residenceId}/inventory`);
+      const invSnap = await invRef.get();
+      const existing = invSnap.docs.find(d => d.data().name.toLowerCase() === itemName.toLowerCase());
+
       if (type === 'add') {
-        if (existingDoc) {
-          await inventoryRef.doc(existingDoc.id).update({ current: FieldValue.increment(q) });
+        if (existing) {
+          await invRef.doc(existing.id).update({ current: FieldValue.increment(qty) });
         } else {
-          await inventoryRef.add({
-            name: itemData.name,
-            current: q,
-            min: 1,
-            unit: 'un'
-          });
+          await invRef.add({ name: itemName, current: qty, min: 1, unit: 'un' });
         }
-      } else if (type === 'remove') {
-        if (existingDoc) {
-          const newCurrent = Math.max(0, existingDoc.current - q);
-          await inventoryRef.doc(existingDoc.id).update({ current: newCurrent });
-        }
+      } else if (type === 'remove' && existing) {
+        const currentData = existing.data();
+        const newVal = Math.max(0, (currentData.current || 0) - qty);
+        await invRef.doc(existing.id).update({ current: newVal });
       }
-      totalProcessed++;
     }
   }
 
   if (listModified) {
-    await listRef.set({ items: listItems, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await listRef.set({ 
+      items, 
+      updatedAt: FieldValue.serverTimestamp() 
+    }, { merge: true });
   }
 
-  console.log(`Sucesso: ${totalProcessed} ações processadas para a residencia ${residenceId}`);
-  return `Tudo pronto! Entendi suas instruções e modifiquei ${totalProcessed} interações no seu painel.`;
+  console.log('✅ Ações processadas com sucesso!');
+  return "Tudo pronto! Já atualizei seu Lar 360 com os itens informados. 🏠✨";
 }
