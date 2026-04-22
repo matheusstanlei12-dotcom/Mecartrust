@@ -61,8 +61,6 @@ export async function processInventoryActions(phone, actionsArray) {
   const cleanPhone = String(phone).replace(/\D/g, '');
   const searchSuffix = cleanPhone.slice(-7); // Usar 7 dígitos é o mais seguro contra erro de 9º dígito e DDD
 
-  console.log(`🔍 [FIREBASE] Iniciando busca para: ${cleanPhone} (Sufixo: ${searchSuffix})`);
-
     // 1. Achar o Usuário (Com Auto-Limpeza de duplicados)
     const usersSnap = await db.collection('users').get();
     let candidates = [];
@@ -70,40 +68,32 @@ export async function processInventoryActions(phone, actionsArray) {
     usersSnap.forEach(doc => {
       const data = doc.data();
       const dbPhone = String(data.phone || '').replace(/\D/g, '');
-      const dbWhatsappId = String(data.whatsappId || '').replace(/\D/g, '');
+      const dbWhId = String(data.whatsappId || '').replace(/\D/g, '');
       
-      if (dbPhone === cleanPhone || dbWhatsappId === cleanPhone || dbPhone.endsWith(searchSuffix)) {
+      if (dbPhone.endsWith(searchSuffix) || dbWhId.endsWith(searchSuffix)) {
         candidates.push({ id: doc.id, ...data, ref: doc.ref });
       }
     });
 
     if (candidates.length === 0) {
-      console.error(`❌ [FIREBASE] Nenhum usuário encontrado para: ${cleanPhone}`);
-      return "Não encontrei sua conta. Por favor, cadastre seu número no site primeiro.";
+      return "Não encontrei sua conta. Por favor, cadastre seu número no site Lar 360 primeiro!";
     }
 
-    // Se houver mais de um, PRIORIZA o que tem activeResidenceId e apaga os outros
+    // Ordena: Primeiro os que tem activeResidenceId, depois por ID (mais novos tendem a ser melhores)
+    candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
+    userDoc = candidates[0];
+
+    // Limpeza em background para não travar a resposta
     if (candidates.length > 1) {
-      console.log(`🧹 [CLEANUP] Encontrados ${candidates.length} usuários com o mesmo telefone. Limpando...`);
-      candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
-      
-      const winner = candidates[0];
+      console.log(`🧹 [CLEANUP] Removendo ${candidates.length - 1} rastros duplicados.`);
       for (let i = 1; i < candidates.length; i++) {
-        console.log(`🗑️ Apagando duplicado antigo: ${candidates[i].id}`);
-        candidates[i].ref.delete().catch(e => console.error('Erro ao apagar duplicado:', e));
+        candidates[i].ref.delete().catch(() => {}); 
       }
-      userDoc = winner;
-    } else {
-      userDoc = candidates[0];
     }
 
-  if (!userDoc) {
-    console.error(`❌ [FIREBASE] Falha total ao encontrar usuário para sufixo [${searchSuffix}]`);
-    return "Não consegui encontrar sua conta. Por favor, verifique se o número cadastrado no App Lar 360 é o mesmo deste WhatsApp.";
-  }
-
-  const uid = userDoc.id;
-  console.log(`👤 Usuário encontrado: ${userDoc.name} (${uid})`);
+    if (!userDoc) return "Erro interno ao localizar perfil.";
+    const uid = userDoc.id;
+    console.log(`👤 Usuário: ${userDoc.name} (${uid})`);
 
   // 2. Achar a Residência (OBRIGATÓRIA agora para evitar erros)
   let residenceId = userDoc.activeResidenceId;
@@ -218,3 +208,5 @@ export async function processInventoryActions(phone, actionsArray) {
 // Trigger: Fix precision and logs 2
 
 // Trigger Cleanup v1
+
+// Sync v2.1
