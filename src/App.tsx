@@ -190,6 +190,16 @@ const COMMON_PRICES: Record<string, number> = {
   'sabão': 12.00
 };
 
+// Segurança Atômica: Formata qualquer valor sem nunca crashar
+const safeToFixed = (val: any, decimals: number = 2) => {
+  try {
+    const n = Number(val);
+    return isNaN(n) ? (0).toFixed(decimals) : n.toFixed(decimals);
+  } catch (e) {
+    return (0).toFixed(decimals);
+  }
+};
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -2397,29 +2407,22 @@ export default function App() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-2xl font-black tracking-tight flex items-center gap-2">
-                    {activeList}
+                    {activeList || 'Lista'}
                     <div className="flex items-center gap-1">
                       <button 
-                        onClick={() => shareViaWhatsApp(items, activeList, totalsByStore[selectedStore])}
+                        onClick={() => shareViaWhatsApp(lists[activeList] || [], activeList, totalsByStore[selectedStore || ''])}
                         className="p-1.5 hover:bg-primary/5 text-primary rounded-lg transition-all"
                         title="Compartilhar via WhatsApp"
                       >
                         <Share2 size={18} />
                       </button>
-                      <button 
-                        onClick={exportListAsReport}
-                        className="p-1.5 hover:bg-primary/5 text-primary rounded-lg transition-all"
-                        title="Exportar Relatório Detalhado"
-                      >
-                        <Download size={18} />
-                      </button>
                     </div>
                   </h2>
-                  <p className="text-sm text-[#666]">{items.length} itens adicionados</p>
+                  <p className="text-sm text-[#666]">{(lists[activeList] || []).length} itens adicionados</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-[#666] uppercase tracking-wider opacity-60">Estimativa Total</p>
-                  <p className="text-3xl font-black text-primary">R$ {((totalsByStore && selectedStore ? totalsByStore[selectedStore] : 0) || 0).toFixed(2)}</p>
+                  <p className="text-3xl font-black text-primary">R$ {safeToFixed(totalsByStore[selectedStore || ''])}</p>
                 </div>
               </div>
 
@@ -2552,7 +2555,7 @@ export default function App() {
                               <div className="flex items-center justify-end gap-3 px-1">
                                 <span className={`text-sm font-black ${item.checked ? 'text-[#D1D1D1]' : 'text-primary'}`}>
                                   {((item?.prices?.[selectedStore] ?? 0) > 0) 
-                                    ? `R$ ${((item.prices[selectedStore] || 0) * (item.quantity || 1)).toFixed(2)}`
+                                    ? `R$ ${safeToFixed((item.prices[selectedStore] || 0) * (item.quantity || 1))}`
                                     : 'Calculando...'}
                                 </span>
                                 <button 
@@ -2729,7 +2732,7 @@ export default function App() {
                               <p className="text-[10px] font-black text-[#6B705C]">{list.date}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xl font-black text-primary">R$ {(list.total || 0).toFixed(2)}</p>
+                              <p className="text-xl font-black text-primary">R$ {safeToFixed(list.total || 0)}</p>
                               <p className="text-[9px] font-black uppercase text-accent tracking-widest">{list.store}</p>
                             </div>
                           </div>
@@ -2942,7 +2945,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4">
                   <p className="text-[10px] font-black uppercase text-primary tracking-widest mb-1">Total Lançado</p>
-                  <p className="text-3xl font-black text-primary italic">R$ {finances.reduce((acc, f) => acc + f.value, 0).toFixed(2)}</p>
+                  <p className="text-3xl font-black text-primary italic">R$ {safeToFixed(finances.reduce((acc, f) => acc + f.value, 0))}</p>
                 </div>
                 <div className="bg-[#D8F3DC] border border-[#2D6A4F]/20 rounded-2xl p-4">
                   <p className="text-[10px] font-black uppercase text-[#2D6A4F] tracking-widest mb-1">Custos Fixos</p>
