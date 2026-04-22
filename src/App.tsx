@@ -562,10 +562,10 @@ export default function App() {
 
     const fixedCosts = finances.filter(f => f.type === 'fixed').reduce((acc, f) => acc + f.value, 0);
     const varCosts = finances.filter(f => f.type === 'variable').reduce((acc, f) => acc + f.value, 0);
-    const groceryTotal = Object.values(lists).reduce((acc, items) => {
+    const groceryTotal = Object.values(lists || {}).reduce((acc, items) => {
       return acc + (items || []).reduce((itemAcc, item) => {
-        const prices = Object.values(item.prices || {});
-        const avg = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+        const prices = Object.values(item?.prices || {});
+        const avg = prices.length > 0 ? (prices.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0) / prices.length) : 0;
         return itemAcc + avg;
       }, 0);
     }, 0);
@@ -1474,8 +1474,8 @@ export default function App() {
       name: activeList,
       date: new Date().toLocaleString('pt-BR'),
       items: [...items],
-      total: totalsByStore[selectedStore] || 0,
-      store: selectedStore
+      total: (totalsByStore && selectedStore) ? (totalsByStore[selectedStore] || 0) : 0,
+      store: selectedStore || 'Padrão'
     };
 
     await addDoc(collection(db, `residences/${selectedResidenceId}/history`), newHistoryEntry);
@@ -1505,7 +1505,7 @@ export default function App() {
 
   const totalsByStore = useMemo(() => {
     return stores.reduce((acc, store) => {
-      acc[store.name] = items.reduce((sum, item) => sum + (item.prices[store.name] || 0) * item.quantity, 0);
+      acc[store.name] = items.reduce((sum, item) => sum + ((item?.prices?.[store.name] || 0) * (item?.quantity || 0)), 0);
       return acc;
     }, {} as Record<string, number>);
   }, [items, stores]);
@@ -2418,7 +2418,7 @@ export default function App() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-[#666] uppercase tracking-wider opacity-60">Estimativa Total</p>
-                  <p className="text-3xl font-black text-primary">R$ {(totalsByStore[selectedStore] || 0).toFixed(2)}</p>
+                  <p className="text-3xl font-black text-primary">R$ {((totalsByStore && selectedStore ? totalsByStore[selectedStore] : 0) || 0).toFixed(2)}</p>
                 </div>
               </div>
 
@@ -2550,8 +2550,8 @@ export default function App() {
                               <div className="text-[10px] text-[#6B705C] font-black uppercase">{item.quantity} {item.unit}</div>
                               <div className="flex items-center justify-end gap-3 px-1">
                                 <span className={`text-sm font-black ${item.checked ? 'text-[#D1D1D1]' : 'text-primary'}`}>
-                                  {item.prices[selectedStore] > 0 
-                                    ? `R$ ${(item.prices[selectedStore] * item.quantity).toFixed(2)}`
+                                  {((item?.prices?.[selectedStore] ?? 0) > 0) 
+                                    ? `R$ ${((item.prices[selectedStore] || 0) * (item.quantity || 1)).toFixed(2)}`
                                     : 'Calculando...'}
                                 </span>
                                 <button 
