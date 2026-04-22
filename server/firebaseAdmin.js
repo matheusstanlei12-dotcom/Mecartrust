@@ -48,7 +48,7 @@ function initFirebase() {
   };
 }
 
-const db = initFirebase();
+export const db = initFirebase();
 const FieldValue = admin.firestore.FieldValue;
 
 /**
