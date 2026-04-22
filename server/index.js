@@ -205,7 +205,7 @@ client.on('message', async msg => {
   if (chat.isGroup) return;
 
   const authorPhone = msg.from.split('@')[0]; // ex: 553199999999
-  console.log(`Mensagem recebida de: ${authorPhone}`);
+  console.log(`📨 Mensagem recebida de: +${authorPhone}`);
 
   let audioBase64 = null;
   let audioMime = null;
@@ -217,39 +217,45 @@ client.on('message', async msg => {
     if (media && media.mimetype.includes('audio')) {
       audioBase64 = media.data;
       audioMime = media.mimetype;
-      console.log('Áudio detectado, enviando para IA transcrição...');
-      msg.reply('Estou ouvindo seu áudio, um segundo...');
+      console.log('🎤 Áudio detectado, enviando para IA...');
+      msg.reply('🎤 Estou ouvindo seu áudio, um segundo...');
     }
   } else {
-    // Se for só oi
+    // Se for só oi/olá
     if (text.trim().toLowerCase() === 'oi' || text.trim().toLowerCase() === 'olá') {
       msg.reply('Olá! 👋 Eu sou o assistente do *MercaTrust*!\nMe mande um áudio ou texto com os itens que estão faltando em casa e eu organizo tudo no sistema pra você! 🛒');
       return;
     }
-    msg.reply('Cadastrando itens no sistema, um momento...');
+    console.log(`💬 Texto recebido: "${text}"`);
+    msg.reply('⏳ Cadastrando itens no sistema, um momento...');
   }
 
   try {
+    console.log('🤖 Enviando para IA processar...');
     const jsonResult = await processInventoryMessage(text, audioBase64, audioMime);
+    console.log('🤖 Resposta da IA:', JSON.stringify(jsonResult));
     
     if (jsonResult.actions && jsonResult.actions.length > 0) {
       
       const itemList = jsonResult.actions.map(a => {
         const icon = a.type === 'add' ? '✅' : '❌';
-        const tgt = a.target === 'inventory' ? 'Despensa' : 'Lista';
-        return `${icon} ${a.item?.quantity || 1}x ${a.item?.name} (${tgt})`;
+        const tgt = a.target === 'inventory' ? 'Despensa' : 'Lista de Compras';
+        return `${icon} ${a.item?.quantity || 1}x ${a.item?.name} → ${tgt}`;
       }).join('\n');
       
+      console.log(`📦 Processando ${jsonResult.actions.length} ações no banco...`);
       let dbResponse = await processInventoryActions(authorPhone, jsonResult.actions);
+      console.log(`✅ Banco atualizado: ${dbResponse}`);
       
-      msg.reply(`Itens identificados e ações geradas:\n${itemList}\n\n${dbResponse}`);
+      msg.reply(`Pronto! Aqui está o que fiz:\n${itemList}\n\n${dbResponse}`);
     } else {
-      msg.reply('Não consegui identificar nenhum item de mercado na sua mensagem. Pode tentar falar de novo?');
+      console.log('⚠️ IA não retornou ações válidas');
+      msg.reply('Não consegui identificar nenhum item de mercado na sua mensagem. Pode tentar falar de novo? 🤔');
     }
 
   } catch (error) {
-    console.error(error);
-    msg.reply('Desculpe, tive um probleminha para processar o item agora. Tente de novo mais tarde!');
+    console.error('💥 Erro ao processar mensagem:', error.message);
+    msg.reply('Desculpe, tive um probleminha para processar agora. Tente de novo! 😅');
   }
 });
 
