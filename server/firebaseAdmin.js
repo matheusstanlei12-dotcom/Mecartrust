@@ -209,5 +209,11 @@ export async function processInventoryActions(phone, actionsArray) {
     }, { merge: true });
   }
 
-  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa ID: \`${residenceId}\``;
+  // Busca nome e código da casa para transparência total no WhatsApp
+  const resDoc = await db.collection('residences').doc(residenceId).get();
+  const resData = resDoc.data();
+  const resName = resData?.name || 'Casa';
+  const inviteCode = resData?.inviteCode || '???';
+
+  return `Operação realizada com sucesso! ✅\n📦 Lista: *"${listName}"* (${listItems.length} itens)\n🏠 Casa: *${resName}* (${inviteCode})`;
 }

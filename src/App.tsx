@@ -2157,6 +2157,37 @@ export default function App() {
               </div>
 
               <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
+                {/* WhatsApp Sync Card */}
+                <div className="bg-[#25D366]/5 border-2 border-[#25D366]/20 rounded-3xl p-6 shadow-sm">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="bg-[#25D366] text-white p-3 rounded-2xl shadow-lg">
+                      <MessageSquare size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-[#128C7E] uppercase tracking-tight">Vincular WhatsApp</h3>
+                      <p className="text-[10px] text-[#6B705C] font-black uppercase tracking-widest">Sincronize esta residência com o robô</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#444] mb-4 leading-relaxed font-medium">
+                    Clique no botão abaixo para garantir que todas as mensagens enviadas para o assistente do Lar360 subam diretamente para <strong>esta residência</strong>.
+                  </p>
+                  <button 
+                    onClick={async () => {
+                      if (user && selectedResidenceId) {
+                        try {
+                          await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: selectedResidenceId });
+                          alert('✅ Casa vinculada com sucesso! O robô agora salvará tudo aqui.');
+                        } catch (e) {
+                          alert('Erro ao vincular. Tente novamente.');
+                        }
+                      }
+                    }}
+                    className="w-full bg-[#25D366] text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#128C7E] transition-all shadow-md active:scale-95"
+                  >
+                    <RefreshCcw size={16} /> Vincular esta Casa ao WhatsApp
+                  </button>
+                </div>
+
                 {/* Info Card */}
                 <div className="bg-white border-2 border-primary/5 rounded-3xl p-6 shadow-sm">
                   <div className="flex justify-between items-start mb-4">
