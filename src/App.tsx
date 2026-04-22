@@ -2552,7 +2552,7 @@ export default function App() {
                                   <Trash2 size={16} />
                                 </button>
                               </div>
-                            </motion.div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -3038,7 +3038,7 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <p className="text-lg font-black text-primary">R$ {(finance.value || 0).toFixed(2)}</p>
+                        <p className="text-lg font-black text-primary">R$ {safeToFixed(finance.value)}</p>
                         <button onClick={() => deleteFinance(finance.id)} className="text-error/30 hover:text-error transition-all opacity-0 group-hover:opacity-100">
                           <Trash2 size={16} />
                         </button>
@@ -3074,30 +3074,26 @@ export default function App() {
                       <div className="p-2 bg-[#D8F3DC] text-[#2D6A4F] rounded-lg"><Home size={18} /></div>
                       <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest">Fixos</p>
                     </div>
-                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {finances.filter(f => f.type === 'fixed').reduce((acc, f) => acc + f.value, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {safeToFixed(finances.filter(f => f.type === 'fixed').reduce((acc, f) => acc + f.value, 0))}</p>
                   </div>
                   <div className="bg-white border border-border-main p-5 rounded-2xl shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                        <div className="p-2 bg-[#FFDDD2] text-[#E5383B] rounded-lg"><DollarSign size={18} /></div>
                        <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest">Variáveis</p>
                     </div>
-                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {finances.filter(f => f.type === 'variable').reduce((acc, f) => acc + f.value, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {safeToFixed(finances.filter(f => f.type === 'variable').reduce((acc, f) => acc + f.value, 0))}</p>
                   </div>
                   <div className="bg-white border border-border-main p-5 rounded-2xl shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                        <div className="p-2 bg-primary/10 text-primary rounded-lg"><ShoppingCart size={18} /></div>
                        <p className="text-[10px] font-black uppercase text-[#6B705C] tracking-widest">Compras</p>
                     </div>
-                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {Object.values(lists).reduce((acc, items) => acc + items.reduce((ia, item) => ia + (Object.values(item.prices || {})[0] || 0), 0), 0).toFixed(2)}</p>
+                    <p className="text-2xl font-black text-[#1A1A1A]">R$ {safeToFixed(Object.values(lists).reduce((acc, items) => acc + items.reduce((ia, item) => ia + (Object.values(item.prices || {})[0] || 0), 0), 0))}</p>
                   </div>
                 </div>
 
                 {aiReport && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white border-2 border-accent/20 rounded-3xl p-6 shadow-xl relative overflow-hidden"
-                  >
+                  <div className="bg-white border-2 border-accent/20 rounded-3xl p-6 shadow-xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                       <Sparkles size={80} />
                     </div>
@@ -3110,7 +3106,7 @@ export default function App() {
                     <div className="prose prose-sm max-w-none text-[#333] leading-relaxed markdown-report">
                       <ReactMarkdown>{aiReport}</ReactMarkdown>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
 
                 {!aiReport && !isGeneratingReport && (
@@ -3156,7 +3152,7 @@ export default function App() {
                     <span className="text-xs font-black text-text-main uppercase tracking-tight">{store.name}</span>
                   </div>
                   <div className="text-2xl font-black text-[#1A1A1A] tracking-tighter">
-                    R$ {total.toFixed(2)}
+                    R$ {safeToFixed(total)}
                   </div>
                   {isBest && (
                     <div className="text-[9px] text-accent font-black mt-1 uppercase tracking-widest">
@@ -3165,7 +3161,7 @@ export default function App() {
                   )}
                   {!isBest && activeTab === 'lists' && items.length > 0 && totalsByStore[store.name] > (bestStore?.[1] as number) && (
                     <div className="text-[9px] text-error font-black mt-1 uppercase">
-                      ✗ +{(((totalsByStore[store.name] / ((bestStore?.[1] as number) || 1)) - 1) * 100).toFixed(0)}% mais caro
+                      ✗ +{safeToFixed(((totalsByStore[store.name] / ((bestStore?.[1] as number) || 1)) - 1) * 100, 0)}% mais caro
                     </div>
                   )}
                 </div>
