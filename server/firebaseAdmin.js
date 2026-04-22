@@ -57,11 +57,11 @@ const FieldValue = admin.firestore.FieldValue;
 export async function processInventoryActions(phone, actionsArray) {
   if (!actionsArray || actionsArray.length === 0) return "Nenhuma ação para processar.";
 
-  // Limpar telefone (formato 55319...)
+  // Normaliza o telefone do WhatsApp
   const cleanPhone = String(phone).replace(/\D/g, '');
-  const last8 = cleanPhone.slice(-8);
+  const searchSuffix = cleanPhone.slice(-7); // Usar 7 dígitos é o mais seguro contra erro de 9º dígito e DDD
 
-  console.log(`🔍 [FIREBASE] Buscando usuário para WhatsApp: ${cleanPhone} (Final: ${last8})`);
+  console.log(`🔍 [FIREBASE] Iniciando busca para: ${cleanPhone} (Sufixo: ${searchSuffix})`);
 
   // 1. Achar o Usuário
   const usersSnap = await db.collection('users').get();
@@ -75,15 +75,15 @@ export async function processInventoryActions(phone, actionsArray) {
     if (dbPhone === cleanPhone) {
       userDoc = { id: doc.id, ...data };
     } 
-    // Tentativa 2: Match pelos últimos 8 dígitos (ignora o 9 e o DDD)
-    else if (dbPhone.endsWith(last8)) {
+    // Tentativa 2: Match pelo sufixo de 7 dígitos (ignora 9º dígito, DDD e código de país)
+    else if (dbPhone.endsWith(searchSuffix)) {
       userDoc = { id: doc.id, ...data };
     }
   });
 
   if (!userDoc) {
-    console.error(`❌ [FIREBASE] Usuário não encontrado para [${cleanPhone}]`);
-    return "Não encontrei sua conta no Lar 360. Verifique se o seu número de WhatsApp no app está cadastrado corretamente!";
+    console.error(`❌ [FIREBASE] Falha total ao encontrar usuário para sufixo [${searchSuffix}]`);
+    return "Não consegui encontrar sua conta. Por favor, verifique se o número cadastrado no App Lar 360 é o mesmo deste WhatsApp.";
   }
 
   const uid = userDoc.id;
