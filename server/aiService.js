@@ -10,103 +10,73 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const GEMINI_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
+const SYSTEM_PROMPT = `Você é o "Lar 360", um assistente residencial de elite, prestativo e inteligente.
+Sua missão ÚNICA e EXCLUSIVA é ajudar o usuário a gerenciar listas de compras e estoque da casa.
+
+--- REGRAS DE PERSONALIDADE ---
+1. Seja dinâmico e use emojis moderadamente para parecer humano.
+2. NUNCA diga que é um robô ou que tem "problemas técnicos". Se algo falhar de verdade, peça desculpas educadamente e sugira tentar de novo.
+3. Se o usuário fizer perguntas fora de "gestão de casa e compras", responda:
+   "Poxa, eu adoraria conversar sobre isso, mas fui programado especificamente para ser seu braço direito na organização da casa! 🏠 Que tal focarmos nas suas listas ou no seu estoque hoje? 😊"
+
+--- REGRAS DE PROCESSAMENTO ---
+- Identifique itens, quantidades e se é para ADICIONAR ou REMOVER da LISTA (list) ou ESTOQUE (inventory).
+- Se receber uma imagem, analise os produtos que vê e extraia os nomes para a lista.
+
+Sua resposta deve ser SEMPRE um JSON válido:
+{
+  "actions": [{"type": "add|remove", "target": "list|inventory", "item": "nome", "quantity": 1, "category": "categoria"}],
+  "reply": "Sua resposta amigável aqui"
+}`;
+
 /**
- * Lógica Simples (Regex) para processamento instantâneo sem IA
+ * Lógica Simples (Regex) para respostas instantâneas
  */
 function simpleParse(text) {
   const clean = text.toLowerCase().trim();
   const result = { actions: [], reply: "" };
 
-  // PADRÕES DE ADICIONAR NA LISTA
-  if (clean.includes('adicione') || clean.includes('preciso de') || clean.includes('coloca') || clean.includes('falta')) {
-    const itemMatch = text.match(/(?:adicione|preciso de|coloca|falta)\s+([^,y\.]+)/i);
+  if (clean.includes('adicione') || clean.includes('preciso de')) {
+    const itemMatch = text.match(/(?:adicione|preciso de)\s+([^,y\.]+)/i);
     if (itemMatch) {
       result.actions.push({ type: 'add', item: itemMatch[1].trim(), quantity: 1, target: 'list', category: 'Despensa' });
-      result.reply = `✅ *${itemMatch[1].trim()}* adicionado à sua lista de compras!`;
+      result.reply = `✅ *${itemMatch[1].trim()}* adicionado à sua lista!`;
       return result;
     }
   }
-
-  // PADRÕES DE ADICIONAR NO ESTOQUE (COMPREI)
-  if (clean.includes('comprei') || clean.includes('guardei') || clean.includes('repor')) {
-    const itemMatch = text.match(/(?:comprei|guardei|repor)\s+([^,y\.]+)/i);
-    if (itemMatch) {
-      result.actions.push({ type: 'add', item: itemMatch[1].trim(), quantity: 1, target: 'inventory', category: 'Despensa' });
-      result.reply = `📦 *${itemMatch[1].trim()}* registrado no seu estoque!`;
-      return result;
-    }
-  }
-
-  // PADRÕES DE REMOVER DO ESTOQUE (USEI)
-  if (clean.includes('usei') || clean.includes('tirei') || clean.includes('acabou')) {
-    const itemMatch = text.match(/(?:usei|tirei|acabou)\s+([^,y\.]+)/i);
-    if (itemMatch) {
-      result.actions.push({ type: 'remove', item: itemMatch[1].trim(), quantity: 1, target: 'inventory', category: 'Despensa' });
-      result.reply = `❌ Retirei *${itemMatch[1].trim()}* do seu estoque.`;
-      return result;
-    }
-  }
-
-  // PADRÕES DE REMOVER DA LISTA
-  if (clean.includes('tira') || clean.includes('remover') || clean.includes('não precisa')) {
-    const itemMatch = text.match(/(?:tira|remover|não precisa de)\s+([^,y\.]+)/i);
-    if (itemMatch) {
-      result.actions.push({ type: 'remove', item: itemMatch[1].trim(), quantity: 1, target: 'list', category: 'Despensa' });
-      result.reply = `🗑️ *${itemMatch[1].trim()}* removido da lista de compras.`;
-      return result;
-    }
-  }
-
-  return null; // Não conseguiu processar de forma simples
+  return null;
 }
 
-export async function processInventoryMessage(textData, base64Audio = null, mimeType = null, userName = '') {
-  // 1. TENTA PROCESSAMENTO SIMPLES PARATEXTO (Rápido e sem erro de API)
-  if (!base64Audio && textData) {
-    const simple = simpleParse(textData);
-    if (simple) {
-      console.log('⚡ Processamento Instantâneo (Regex) bem-sucedido!');
-      return simple;
-    }
-  }
-
-  // 2. SE NÃO FOR SIMPLES OU FOR ÁUDIO, USA IA COM RETRY
-  const systemPrompt = `Você é o assistente "Lar 360". Identifique itens e ações.
-Retorne SEMPRE JSON: { "reply": "...", "actions": [{ "type": "add/remove", "item": "...", "target": "list/inventory", "quantity": 1 }] }`;
-
-  const modelsToTry = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash'];
-  let result = null;
-  let lastError = null;
-
-  for (const modelName of modelsToTry) {
-    try {
-      console.log(`🤖 Tentando IA (${modelName})...`);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      
-      let parts = [{ text: systemPrompt }];
-      if (base64Audio && mimeType) {
-        parts.push({ inlineData: { data: base64Audio, mimeType } });
-      } else {
-        parts.push({ text: textData });
-      }
-
-      result = await model.generateContent({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { temperature: 0, responseMimeType: "application/json" }
-      });
-
-      if (result && result.response) break;
-    } catch (e) {
-      console.warn(`⚠️ Erro no modelo ${modelName}:`, e.message);
-      lastError = e;
-    }
-  }
-
+export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
-    if (!result) throw lastError || new Error("Indisponível");
+    // 1. Tenta Regex rápido se for só texto
+    if (!audioBase64 && !imageBase64 && text) {
+      const quick = simpleParse(text);
+      if (quick) return quick;
+    }
 
+    // 2. IA para casos complexos, áudio ou imagem
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const promptParts = [SYSTEM_PROMPT];
+
+    if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
+    
+    if (audioBase64) {
+      promptParts.push({ inlineData: { data: audioBase64, mimeType: audioMime } });
+      promptParts.push("Analise o áudio acima.");
+    }
+
+    if (imageBase64) {
+      promptParts.push({ inlineData: { data: imageBase64, mimeType: imageMime } });
+      promptParts.push("Analise a imagem acima e extraia itens de mercado.");
+    }
+
+    const result = await model.generateContent(promptParts);
     const responseText = result.response.text();
-    const parsed = JSON.parse(responseText);
+    
+    // Limpeza de Markdown se necessário
+    const jsonStr = responseText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
     
     return {
       actions: parsed.actions || [],
@@ -114,10 +84,10 @@ Retorne SEMPRE JSON: { "reply": "...", "actions": [{ "type": "add/remove", "item
     };
 
   } catch (e) {
-    console.error('❌ IA falhou:', e.message);
+    console.error('❌ IA Error:', e.message);
     return { 
       actions: [], 
-      reply: "Ops! Tive um problema técnico. Tente escrever de forma simples, ex: 'Adicione arroz'." 
+      reply: "Desculpe, tive um pequeno tropeço aqui. Pode repetir de um jeito mais simples? 😊" 
     };
   }
 }

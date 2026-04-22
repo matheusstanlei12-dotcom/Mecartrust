@@ -285,20 +285,30 @@ client.on('message', async (msg) => {
 
   let audioBase64 = null;
   let audioMime = null;
+  let imageBase64 = null;
+  let imageMime = null;
 
   if (msg.hasMedia) {
     const media = await msg.downloadMedia();
-    if (media && media.mimetype.includes('audio')) {
-      audioBase64 = media.data;
-      audioMime = media.mimetype;
-      const audioPre = firstName ? `🎤 Ouvi você, *${firstName}*! Processando...` : '🎤 Processando seu áudio...';
-      await msg.reply(audioPre);
+    if (media) {
+      if (media.mimetype.includes('audio')) {
+        audioBase64 = media.data;
+        audioMime = media.mimetype;
+        const audioPre = firstName ? `🎤 Ouvi você, *${firstName}*! Processando...` : '🎤 Processando seu áudio...';
+        await msg.reply(audioPre);
+      } else if (media.mimetype.includes('image')) {
+        imageBase64 = media.data;
+        imageMime = media.mimetype;
+        const imagePre = firstName ? `📸 Deixa eu ver isso aqui, *${firstName}*...` : '📸 Analisando sua foto...';
+        await msg.reply(imagePre);
+      }
     }
   } else {
     const textPre = firstName ? `⏳ Anotando isso, *${firstName}*...` : '⏳ Processando...';
     await msg.reply(textPre);
   }
 
+  try {
     // --- LÓGICA DE SESSÃO / ESCOLHA DE CASA ---
     if (userData && (text.trim().length <= 2 || text.toLowerCase().includes('casa'))) {
       const sessionSnap = await db.collection('sessions').doc(authorPhone).get();
@@ -318,7 +328,7 @@ client.on('message', async (msg) => {
       }
     }
 
-    const result = await processInventoryMessage(text, audioBase64, audioMime, firstName);
+    const result = await processInventoryMessage(text, audioBase64, audioMime, firstName, imageBase64, imageMime);
     console.log('🤖 IA:', JSON.stringify(result));
 
     if (result.actions && result.actions.length > 0) {
@@ -342,7 +352,7 @@ client.on('message', async (msg) => {
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
-    await msg.reply(`Tive um probleminha técnico: *${err.message}*. Tente novamente em instantes! 😅`);
+    await msg.reply('Poxa, me perdi por um segundo! 😅 Pode repetir de um jeito mais simples? 😊');
   }
 });
 
