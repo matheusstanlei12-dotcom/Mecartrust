@@ -8,61 +8,56 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_KEY) {
-  console.error('❌ GEMINI_API_KEY não configurada!');
-}
-
 const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
 export async function processInventoryMessage(textData, base64Audio = null, mimeType = null) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  // Configuração do modelo com instruções de sistema fixas
+  const model = genAI.getGenerativeModel({ 
+    model: 'gemini-1.5-flash',
+    systemInstruction: `Você é o assistente inteligente do sistema "Lar 360", especialista em gestão de estoque e listas de compras.
 
-  const systemInstructions = `Você é o assistente inteligente do sistema "Lar 360", especialista em gestão de estoque e listas de compras.
-Sua personalidade é amigável, prestativa e organizada. Você deve fazer o usuário se sentir confortável e bem atendido.
+REGRAS:
+1. Seja amigável e use o nome do usuário se fornecido.
+2. Responda APENAS sobre estoque e compras. Se perguntarem outra coisa, diga que não pode ajudar com esse assunto.
+3. Use o campo "reply" para sua resposta textual amigável.
+4. Use o campo "actions" para listar adições ou remoções de itens.
 
-REGRAS DE CONDUTA:
-1. FOCO TOTAL: Você só responde sobre gestão de estoque, listas de compras e itens domésticos.
-2. SE FORA DE TÓPICO: Se o usuário fizer perguntas sobre outros assuntos (história, política, piadas off-topic, etc), responda educadamente que você é especialista no Lar 360 e só pode ajudar com a organização da casa.
-3. INTERATIVIDADE: Use frases naturais e amigáveis no campo "reply".
+CATEGORIAS: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Bebidas, Despensa, Higiene Pessoal, Limpeza, Outros.
 
-FORMATO DE RETORNO (JSON APENAS):
+FORMATO JSON:
 {
-  "actions": [
-    {
-      "type": "add" | "remove",
-      "target": "list" | "inventory",
-      "item": { "name": "string", "category": "string", "quantity": number }
-    }
-  ],
-  "reply": "Sua resposta amigável aqui para o usuário"
-}
-
-CATEGORIAS: Hortifrúti, Laticínios, Padaria, Açougue e Frios, Bebidas, Despensa, Higiene Pessoal, Limpeza, Outros.`;
+  "actions": [{"type": "add"|"remove", "target": "list"|"inventory", "item": {"name": "string", "category": "string", "quantity": number}}],
+  "reply": "string"
+}`
+  });
 
   try {
     let parts = [];
     if (base64Audio && mimeType) {
       parts.push({ inlineData: { data: base64Audio, mimeType } });
-      parts.push({ text: `${systemInstructions}\n\nAnalise o áudio e responda conforme as regras.` });
+      parts.push({ text: "Analise este áudio e identifique as intenções do usuário para o Lar 360." });
     } else {
-      parts.push({ text: `${systemInstructions}\n\nUsuário disse: "${textData}"` });
+      parts.push({ text: textData });
     }
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.2 }
+      generationConfig: { 
+        temperature: 0.1,
+        responseMimeType: "application/json" 
+      }
     });
 
-    let responseText = result.response.text().trim();
-    
-    // Limpar markdown
-    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const responseText = result.response.text().trim();
+    console.log('🤖 IA Output:', responseText);
 
-    const parsed = JSON.parse(responseText);
-    return parsed;
+    return JSON.parse(responseText);
 
   } catch (e) {
     console.error('❌ Erro na IA:', e.message);
-    return { actions: [], reply: "Desculpe, tive um probleminha para entender agora. Pode repetir? 😅" };
+    return { 
+      actions: [], 
+      reply: "Desculpe, tive um probleminha técnico para processar seu pedido agora. Pode tentar falar de novo? 😅" 
+    };
   }
 }
