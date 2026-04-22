@@ -310,11 +310,8 @@ client.on('message', async (msg) => {
       
       // Se o banco retornar um erro conhecido (ex: não achou usuário), avisa o usuário.
       // Caso contrário, usa o texto amigável da IA.
-      if (dbStatus.startsWith('Não encontrei') || dbStatus.startsWith('Você ainda não')) {
-        await msg.reply(`⚠️ *Atenção:* ${dbStatus}`);
-      } else {
-        await msg.reply(result.reply || "Tudo certo! Já organizei isso para você. ✅");
-      }
+      // Retorna o status real do banco de dados (que inclui o ID da Casa e Nome da Lista)
+      await msg.reply(dbStatus || result.reply || "Tudo certo! Já organizei isso para você. ✅");
     } else {
       // Se não houver ações (ex: pergunta fora de tópico ou saudação)
       await msg.reply(result.reply || "Pode repetir? Não consegui entender o item. 🤔");
