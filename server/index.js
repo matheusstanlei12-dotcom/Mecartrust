@@ -29,6 +29,40 @@ app_express.use(express.static(distPath));
 // Teste de vida (Health Check)
 app_express.get('/ping', (req, res) => res.send('pong'));
 
+// Rota para TROCAR o número do WhatsApp (apaga a sessão e gera novo QR)
+app_express.get('/reset-session', async (req, res) => {
+    console.log('🔄 Solicitação de troca de número recebida...');
+    try {
+        await client.destroy();
+    } catch(e) { /* ignora erro se já estava desconectado */ }
+    
+    // Apagar pasta de sessão
+    const sessionPath = path.join(__dirname, '../.wwebjs_auth');
+    if (fs.existsSync(sessionPath)) {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        console.log('🧹 Sessão antiga apagada com sucesso!');
+    }
+    lastQr = null;
+    
+    // Reiniciar o cliente após 2 segundos
+    setTimeout(() => {
+        console.log('🤖 Reiniciando robô para novo número...');
+        client.initialize().catch(err => console.error('Erro ao reiniciar:', err.message));
+    }, 2000);
+    
+    res.send(`
+        <html>
+            <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f0f2f5">
+                <div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1);text-align:center">
+                    <h2 style="color:#25d366">✅ Sessão Reiniciada!</h2>
+                    <p style="color:#666">Aguarde 10 segundos e acesse <strong>/qr</strong> para escanear com o novo número.</p>
+                    <script>setTimeout(() => location.href='/qr', 10000)</script>
+                </div>
+            </body>
+        </html>
+    `);
+});
+
 // Rota para ver o QR Code de forma limpa (Deve vir ANTES do wildcard *)
 app_express.get('/qr', (req, res) => {
     if (!lastQr) {
@@ -53,6 +87,7 @@ app_express.get('/qr', (req, res) => {
                     <h2 style="color:#25d366;margin-bottom:20px">Conectar MercaTrust</h2>
                     <div id="qrcode"></div>
                     <p style="margin-top:20px;color:#666">Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
+                    <a href="/reset-session" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#ff4444;color:white;border-radius:8px;text-decoration:none;font-size:0.9rem">🔄 Trocar Número do WhatsApp</a>
                 </div>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
                 <script>
