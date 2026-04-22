@@ -63,28 +63,39 @@ export async function processInventoryActions(phone, actionsArray) {
 
   console.log(`🔍 [FIREBASE] Iniciando busca para: ${cleanPhone} (Sufixo: ${searchSuffix})`);
 
-  // 1. Achar o Usuário
-  const usersSnap = await db.collection('users').get();
-  let userDoc = null;
+    // 1. Achar o Usuário (Com Auto-Limpeza de duplicados)
+    const usersSnap = await db.collection('users').get();
+    let candidates = [];
+    
+    usersSnap.forEach(doc => {
+      const data = doc.data();
+      const dbPhone = String(data.phone || '').replace(/\D/g, '');
+      const dbWhatsappId = String(data.whatsappId || '').replace(/\D/g, '');
+      
+      if (dbPhone === cleanPhone || dbWhatsappId === cleanPhone || dbPhone.endsWith(searchSuffix)) {
+        candidates.push({ id: doc.id, ...data, ref: doc.ref });
+      }
+    });
 
-  console.log(`📊 [DEBUG] Total de usuários no banco: ${usersSnap.size}`);
-  
-  usersSnap.forEach(doc => {
-    const data = doc.data();
-    const dbPhone = String(data.phone || '').replace(/\D/g, '');
-    const dbWhatsappId = String(data.whatsappId || '').replace(/\D/g, '');
-    
-    console.log(`   - Usuário: ${data.name} | Cel: ${dbPhone} | WhatsAppID: ${dbWhatsappId}`);
-    
-    // Tentativa 1: Match exato
-    if (dbPhone === cleanPhone || dbWhatsappId === cleanPhone) {
-      userDoc = { id: doc.id, ...data };
-    } 
-    // Tentativa 2: Match pelo sufixo de 7 dígitos
-    else if (dbPhone.endsWith(searchSuffix) || dbWhatsappId.endsWith(searchSuffix)) {
-      userDoc = { id: doc.id, ...data };
+    if (candidates.length === 0) {
+      console.error(`❌ [FIREBASE] Nenhum usuário encontrado para: ${cleanPhone}`);
+      return "Não encontrei sua conta. Por favor, cadastre seu número no site primeiro.";
     }
-  });
+
+    // Se houver mais de um, PRIORIZA o que tem activeResidenceId e apaga os outros
+    if (candidates.length > 1) {
+      console.log(`🧹 [CLEANUP] Encontrados ${candidates.length} usuários com o mesmo telefone. Limpando...`);
+      candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
+      
+      const winner = candidates[0];
+      for (let i = 1; i < candidates.length; i++) {
+        console.log(`🗑️ Apagando duplicado antigo: ${candidates[i].id}`);
+        candidates[i].ref.delete().catch(e => console.error('Erro ao apagar duplicado:', e));
+      }
+      userDoc = winner;
+    } else {
+      userDoc = candidates[0];
+    }
 
   if (!userDoc) {
     console.error(`❌ [FIREBASE] Falha total ao encontrar usuário para sufixo [${searchSuffix}]`);
@@ -205,3 +216,5 @@ export async function processInventoryActions(phone, actionsArray) {
 }
 
 // Trigger: Fix precision and logs 2
+
+// Trigger Cleanup v1
