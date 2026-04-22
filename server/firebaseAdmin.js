@@ -81,7 +81,7 @@ export async function processInventoryActions(phone, actionsArray) {
 
     // Ordena: Primeiro os que tem activeResidenceId, depois por ID (mais novos tendem a ser melhores)
     candidates.sort((a, b) => (b.activeResidenceId ? 1 : 0) - (a.activeResidenceId ? 1 : 0));
-    userDoc = candidates[0];
+    const userDoc = candidates[0];
 
     // Limpeza em background para não travar a resposta
     if (candidates.length > 1) {
