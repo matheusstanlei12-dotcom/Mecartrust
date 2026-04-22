@@ -80,10 +80,15 @@ server_http.listen(PORT, '0.0.0.0', () => {
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
       args: [
-        '--no-sandbox', 
+        '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage'
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
       ]
   }
 });
@@ -97,11 +102,14 @@ client.on('qr', (qr) => {
 
 // Rota /qr removida daqui (movida para cima)
 
-// Iniciar robô com logs detalhados
-console.log('🤖 Tentando iniciar o motor do robô... (Isso pode levar até 1 minuto)');
-client.initialize().catch(err => {
-    console.error('💥 ERRO FATAL AO INICIAR ROBÔ:', err);
-});
+// Iniciar robô em segundo plano, DEPOIS que o servidor web já respondeu
+// Isso evita que a Railway desligue tudo achando que o servidor travou
+setTimeout(() => {
+    console.log('🤖 Iniciando motor do robô em segundo plano...');
+    client.initialize().catch(err => {
+        console.error('💥 ERRO AO INICIAR ROBÔ:', err.message);
+    });
+}, 5000); // 5 segundos de delay para o servidor web estabilizar
 
 client.on('ready', () => {
     lastQr = null; 
