@@ -961,12 +961,13 @@ export default function App() {
     try {
       await setDoc(doc(db, 'users', user.uid), {
         phone: cleanPhone,
-        name: onboardName
+        name: onboardName,
+        activeResidenceId: selectedResidenceId || null
       }, { merge: true });
-      setNeedsPhoneOnboarding(false);
+      alert('✅ Perfil e WhatsApp atualizados com sucesso!');
     } catch(e) {
       console.error(e);
-      alert('Erro ao salvar o telefone');
+      alert('Erro ao salvar os dados.');
     }
     setOnboardSaving(false);
   };
