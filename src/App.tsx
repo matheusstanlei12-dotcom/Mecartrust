@@ -2521,22 +2521,22 @@ export default function App() {
                   </div>
                 ) : (
                   DEFAULT_CATEGORIES.map(category => {
-                    const categoryItems = items.filter(i => i.category === category);
-                    if (categoryItems.length === 0) return null;
+                  const categoryItems = items.filter(i => i.category === category);
+                  if (categoryItems.length === 0) return null;
 
-                    return (
-                      <div key={category} className="mb-8 last:mb-0">
-                        <div className="flex items-center gap-2 mb-4">
-                          <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6B705C] whitespace-nowrap">{category}</h3>
-                          <div className="h-px bg-border-main flex-1 opacity-50"></div>
-                        </div>
-                        <div className="space-y-px">
-                          {categoryItems.map(item => (
-                            <motion.div 
-                              key={item.id}
-                              layout
-                              className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
-                            >
+                  return (
+                    <div key={`category-${category}-${activeList}`} className="mb-8 last:mb-0">
+                      <div className="flex items-center gap-2 mb-4">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6B705C] whitespace-nowrap">{category}</h3>
+                        <div className="h-px bg-border-main flex-1 opacity-50"></div>
+                      </div>
+                      <div className="space-y-px">
+                        {categoryItems.map((item, idx) => (
+                          <motion.div 
+                            key={`${item.id}-${idx}`}
+                            layout
+                            className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
+                          >
                               <button 
                                 onClick={() => toggleCheck(item.id)}
                                 className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${
