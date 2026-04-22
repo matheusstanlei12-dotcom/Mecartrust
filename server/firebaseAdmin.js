@@ -104,9 +104,10 @@ export async function processInventoryActions(phone, actionsArray) {
     const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
     
     if (!resSnap.empty) {
-      // Pega a mais recente se houver várias (ordenando por id pois docs costumam ter IDs sequenciais no Firebase se vierem de datas próximas, mas o ideal seria timestamp)
-      residenceId = resSnap.docs[0].id;
-      console.log(`🏠 Residência encontrada via busca: ${residenceId}`);
+      // Prioridade 1: Tenta achar uma que se chame "Casa"
+      const mainCasa = resSnap.docs.find(d => d.data().name === 'Casa');
+      residenceId = mainCasa ? mainCasa.id : resSnap.docs[0].id;
+      console.log(`🏠 Residência encontrada via busca (${mainCasa ? 'Preferencial' : 'Primeira'}): ${residenceId}`);
     } else {
       // Fallback: Tenta achar onde ele é apenas um membro
       console.log(`🔍 Fallback: Buscando residências como membro...`);

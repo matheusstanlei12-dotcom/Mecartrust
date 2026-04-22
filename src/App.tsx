@@ -708,6 +708,8 @@ export default function App() {
       inviteCode,
       createdAt: serverTimestamp()
     });
+    // Sincroniza imediatamente para o Robô
+    await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: resRef.id });
     setSelectedResidenceId(resRef.id);
     localStorage.setItem('lar360_selected_residence', resRef.id);
     setResidenceNameInput('');
@@ -733,6 +735,8 @@ export default function App() {
       const resData = resDoc.data();
 
       if (resData.members.includes(user.uid)) {
+        // Sincroniza imediatamente para o Robô
+        await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: resDoc.id });
         setSelectedResidenceId(resDoc.id);
         localStorage.setItem('lar360_selected_residence', resDoc.id);
         setIsJoining(false);
@@ -1762,7 +1766,11 @@ export default function App() {
                 {residences.map(res => (
                   <button
                     key={res.id}
-                    onClick={() => {
+                    onClick={async () => {
+                      // Sincroniza imediatamente para o Robô
+                      if (user) {
+                        await updateDoc(doc(db, 'users', user.uid), { activeResidenceId: res.id });
+                      }
                       setSelectedResidenceId(res.id);
                       localStorage.setItem('lar360_selected_residence', res.id);
                     }}
@@ -1814,7 +1822,6 @@ export default function App() {
               </div>
 
               <div className="border-t border-border-main pt-6 mt-6">
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#6B705C] mb-4">Nova Residência</h3>
                 <form onSubmit={createResidence} className="flex gap-2">
                   <input
                     type="text"
