@@ -389,12 +389,8 @@ export default function App() {
       snapshot.forEach(d => res.push({ id: d.id, ...d.data() } as Residence));
       setResidences(res);
       
-      const persistedId = localStorage.getItem('lar360_selected_residence');
-      const isStillMember = res.some(r => r.id === persistedId);
-
-      // Auto-create residence for new users
       if (res.length === 0 && user) {
-        console.log("🏠 Criando residência automática...");
+        console.log("🏠 Criando residência única...");
         const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         addDoc(collection(db, 'residences'), {
           name: 'Minha Casa',
@@ -402,23 +398,37 @@ export default function App() {
           members: [user.uid],
           inviteCode,
           createdAt: serverTimestamp()
-        }).then(ref => {
+        }).then(async (ref) => {
+          // Cria a lista padrão IMEDIATAMENTE no Firestore para garantir sincronia
+          await setDoc(doc(db, `residences/${ref.id}/lists`, 'Compras da Semana'), {
+            items: [],
+            createdAt: serverTimestamp()
+          });
+          
           setSelectedResidenceId(ref.id);
           localStorage.setItem('lar360_selected_residence', ref.id);
           updateDoc(doc(db, 'users', user.uid), { activeResidenceId: ref.id });
         });
-      } else if (res.length > 0 && (!selectedResidenceId || !isStillMember)) {
-        const defaultId = res[0].id;
-        setSelectedResidenceId(defaultId);
-        localStorage.setItem('lar360_selected_residence', defaultId);
-      } else if (selectedResidenceId && !isStillMember) {
-        setSelectedResidenceId(null);
-        localStorage.removeItem('lar360_selected_residence');
+      } else if (res.length > 0) {
+        // Se a casa do Firestore for válida, usa ela. Senão pega a primeira e atualiza o Firestore.
+        const firestoreActiveId = userProfile?.activeResidenceId;
+        const validDoc = res.find(r => r.id === firestoreActiveId) || res[0];
+        
+        if (selectedResidenceId !== validDoc.id) {
+          setSelectedResidenceId(validDoc.id);
+          localStorage.setItem('lar360_selected_residence', validDoc.id);
+          if (userProfile?.activeResidenceId !== validDoc.id) {
+            updateDoc(doc(db, 'users', user.uid), { activeResidenceId: validDoc.id });
+          }
+        }
       }
+
+
     });
 
     return () => unsubRes();
-  }, [user, isAdmin, selectedResidenceId]);
+  }, [user, isAdmin, selectedResidenceId, userProfile]);
+
 
   // Sync Access Requests (for residence owners)
   useEffect(() => {
@@ -1684,20 +1694,13 @@ export default function App() {
             <span className="text-xl md:text-2xl">🏠</span> Lar360
           </button>
           <div className="h-6 w-px bg-white/20 hidden lg:block"></div>
-          <div className="hidden lg:flex items-center gap-3">
             <div className="bg-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2">
               <Home size={14} className="text-secondary" />
               <span className="font-bold text-sm tracking-tight">
-                {residences.find(r => r.id === selectedResidenceId)?.name || 'Residência'}
+                {residences.find(r => r.id === selectedResidenceId)?.name || 'Minha Casa'}
               </span>
             </div>
-            <button 
-              onClick={() => setSelectedResidenceId(null)}
-              className="text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100 flex items-center gap-1 transition-all"
-            >
-              <RefreshCcw size={12} /> Trocar
-            </button>
-          </div>
+
         </div>
         <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm">
           <div className="hidden sm:flex items-center gap-1 opacity-80">

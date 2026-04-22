@@ -82,16 +82,15 @@ export async function processInventoryActions(phone, actions, choice = null) {
     const userDoc = candidates[0];
     const uid = userDoc.id;
 
-    // 2. Achar a única Residência do usuário (Foco em simplicidade total)
+    // 2. Achar a única Residência do usuário (Simplicidade Definitiva: 1 Usuário = 1 Casa)
     const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
     let residenceId = null;
 
-
     if (resSnap.empty) {
-      // Se por algum motivo não houver casa, cria uma agora mesmo
-      console.log(`🏠 Criando casa automática para ${userDoc.name}`);
+      console.log(`🏠 Criando casa única para ${userDoc.name}`);
       const newResRef = db.collection('residences').doc();
       residenceId = newResRef.id;
+      
       await newResRef.set({
         name: 'Minha Casa',
         ownerId: uid,
@@ -99,16 +98,23 @@ export async function processInventoryActions(phone, actions, choice = null) {
         inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
-      // Atualiza o perfil do usuário também
+
+      // Cria a lista padrão imediatamente para evitar sincronização vazia
+      await newResRef.collection('lists').doc('Compras da Semana').set({
+        items: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
       await db.collection('users').doc(uid).update({ activeResidenceId: residenceId });
     } else {
-      // Pega a primeira que encontrar e foca nela
+      // Se tiver mais de uma (legado), ignora e foca sempre na primeira encontrada
       residenceId = resSnap.docs[0].id;
-      // Se não estiver marcada como ativa no perfil, marca agora para casar os dados
       if (userDoc.activeResidenceId !== residenceId) {
         await db.collection('users').doc(uid).update({ activeResidenceId: residenceId });
       }
     }
+
+
 
   // Verifica se a residência ainda existe
   const resCheck = await db.collection('residences').doc(residenceId).get();
