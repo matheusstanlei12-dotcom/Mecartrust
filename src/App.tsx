@@ -1858,6 +1858,14 @@ export default function App() {
                   <Home size={16} /> Início
                 </button>
                 <button 
+                  onClick={() => setActiveTab('whatsapp')}
+                  className={`w-full p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-bold text-sm ${
+                    activeTab === 'whatsapp' ? 'bg-[#25D366] text-white shadow-md' : 'bg-[#E9F5EE] text-[#128C7E] hover:bg-[#D1E7DD]'
+                  }`}
+                >
+                  <MessageSquare size={16} /> Assistente WhatsApp
+                </button>
+                <button 
                   onClick={() => setActiveTab('lists')}
                   className={`w-full p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-bold text-sm ${
                     activeTab === 'lists' ? 'bg-primary text-white shadow-sm' : 'hover:bg-primary/5 text-[#6B705C]'
@@ -1925,14 +1933,6 @@ export default function App() {
                   <Home size={16} /> Gerenciar Residência
                 </button>
 
-                  <button 
-                    onClick={() => setActiveTab('whatsapp')}
-                    className={`w-full p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-bold text-sm ${
-                      activeTab === 'whatsapp' ? 'bg-[#25D366] text-white shadow-sm' : 'hover:bg-[#25D366]/5 text-[#128C7E]'
-                    }`}
-                  >
-                    <MessageSquare size={16} /> Assistente WhatsApp
-                  </button>
 
                 {isAdmin && (
                   <button 
@@ -3323,6 +3323,12 @@ export default function App() {
         >
           <Home size={18} />
           <span className="text-[8px] font-black uppercase">Início</span>
+        <button 
+          onClick={() => setActiveTab('whatsapp')}
+          className={`shrink-0 flex flex-col items-center gap-1 p-2 min-w-[60px] rounded-xl transition-all ${activeTab === 'whatsapp' ? 'text-[#25D366]' : 'text-[#6B705C] opacity-60'}`}
+        >
+          <MessageSquare size={18} />
+          <span className="text-[8px] font-black uppercase">I.A. Whats</span>
         </button>
         <button 
           onClick={() => setActiveTab('lists')}
