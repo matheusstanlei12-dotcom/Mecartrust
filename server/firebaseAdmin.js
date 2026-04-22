@@ -90,12 +90,12 @@ export async function processInventoryActions(phoneNumber, actionsArray) {
   let items = listDoc.exists ? (listDoc.data().items || []) : [];
 
   for (const action of actionsArray) {
-    const { type, target, item } = action;
-    if (!item?.name) continue;
+    const { type, target, item, quantity, category: actionCategory } = action;
+    if (!item) continue;
 
-    const itemName = item.name.trim();
-    const qty = Number(item.quantity) || 1;
-    const category = item.category || 'Despensa';
+    const itemName = item.trim();
+    const qty = Number(quantity) || 1;
+    const category = actionCategory || 'Despensa';
 
     if (target === 'list') {
       const idx = items.findIndex(i => i.name.toLowerCase() === itemName.toLowerCase());
