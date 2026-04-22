@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Carregamento dinâmico da conta de serviço
-function initFirebase() {
+export function initFirebase() {
   const serviceAccountVar = process.env.CONTA_DE_SERVIÇO_FIREBASE || process.env.FIREBASE_SERVICE_ACCOUNT;
   
   if (serviceAccountVar) {
