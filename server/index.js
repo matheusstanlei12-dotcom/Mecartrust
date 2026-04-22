@@ -2,8 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth, MessageMedia } = pkg;
-import qrcode from 'qrcode-terminal';
+const { Client, RemoteAuth, MessageMedia } = pkg;
 import express from 'express';
 import http from 'http';
 
@@ -12,6 +11,7 @@ const server_http = http.createServer(app_express);
 
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
 import { processInventoryMessage } from './aiService.js';
+import { FirestoreStore } from './sessionStore.js';
 
 // Inicializar banco
 const hasDB = initFirebase();
@@ -113,7 +113,10 @@ server_http.listen(PORT, '0.0.0.0', () => {
 });
 
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new RemoteAuth({
+    store: new FirestoreStore(),
+    backupSyncIntervalMs: 300000 // Salva sessão no Firebase a cada 5 minutos
+  }),
   puppeteer: {
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
       args: [
