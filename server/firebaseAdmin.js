@@ -104,10 +104,12 @@ export async function processInventoryActions(phone, actionsArray) {
     const resSnap = await db.collection('residences').where('ownerId', '==', uid).get();
     
     if (!resSnap.empty) {
-      // Prioridade 1: Tenta achar uma que se chame "Casa"
-      const mainCasa = resSnap.docs.find(d => d.data().name === 'Casa');
+      // Prioridade 1: Tenta achar uma que se chame "Casa" ou "casa" (Case Insensitive)
+      const mainCasa = resSnap.docs.find(d => 
+        d.data().name.toLowerCase().trim() === 'casa'
+      );
       residenceId = mainCasa ? mainCasa.id : resSnap.docs[0].id;
-      console.log(`🏠 Residência encontrada via busca (${mainCasa ? 'Preferencial' : 'Primeira'}): ${residenceId}`);
+      console.log(`🏠 Residência encontrada via busca (${mainCasa ? 'Nome Protetor' : 'Fallback'}): ${residenceId}`);
     } else {
       // Fallback: Tenta achar onde ele é apenas um membro
       console.log(`🔍 Fallback: Buscando residências como membro...`);
