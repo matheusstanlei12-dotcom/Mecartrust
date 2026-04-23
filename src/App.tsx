@@ -1330,12 +1330,7 @@ export default function App() {
           }
         }
       }
-items: updatedItems,
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
-      }
+
       logAction('image_processed', mode);
       setFeedbackFeature('Leitura de IA');
       setShowFeedbackModal(true);
