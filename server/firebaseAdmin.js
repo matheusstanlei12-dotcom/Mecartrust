@@ -13,11 +13,14 @@ export function initFirebase() {
   if (serviceAccountVar) {
     try {
       const serviceAccount = JSON.parse(serviceAccountVar);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      console.log('✅ Firebase Admin inicializado via Variável de Ambiente.');
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+        console.log('✅ Firebase Admin inicializado via Variável de Ambiente.');
+      }
       return admin.firestore();
+
     } catch (e) {
       console.error('❌ Erro ao processar JSON da conta de serviço:', e.message);
     }
@@ -26,11 +29,14 @@ export function initFirebase() {
   const localKeyPath = path.join(__dirname, 'serviceAccountKey.json');
   if (fs.existsSync(localKeyPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(localKeyPath, 'utf8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log('✅ Firebase Admin inicializado via Arquivo Local.');
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('✅ Firebase Admin inicializado via Arquivo Local.');
+    }
     return admin.firestore();
+
   }
 
   console.warn('⚠️ Firebase não inicializado corretamente. Verifique as credenciais.');

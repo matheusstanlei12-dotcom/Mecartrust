@@ -26,201 +26,103 @@ Retorne EXCLUSIVAMENTE um JSON:
   "reply": "Texto sintetizado para o usuário"
 }`;
 
+async function safeGenerate(promptParts) {
+  const modelsToTry = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro"];
+  let lastError = null;
 
-
-
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(promptParts);
+      if (result) {
+        const text = result.response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`⚠️ Modelo ${modelName} falhou:`, err.message);
+    }
+  }
+  throw lastError || new Error("Falha total na IA");
+}
 
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
-    // 1. IA para todos os casos - garante inteligência e evita erros de regex simples
-    const modelsToTry = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro"];
-    let result = null;
-    let lastError = null;
-
-    for (const modelName of modelsToTry) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const promptParts = [SYSTEM_PROMPT];
-
-        if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
-        
-        if (audioBase64) {
-          const cleanMime = audioMime.split(';')[0];
-          promptParts.push({ inlineData: { data: audioBase64, mimeType: cleanMime } });
-          promptParts.push("DICA: Transcreva o áudio acima e extraia itens.");
-        }
-
-        if (imageBase64) {
-          const cleanMime = imageMime.split(';')[0];
-          promptParts.push({ inlineData: { data: imageBase64, mimeType: cleanMime } });
-          promptParts.push("DICA: Analise a imagem.");
-        }
-
-        result = await model.generateContent(promptParts);
-        if (result) break; // Sucesso!
-      } catch (err) {
-        lastError = err;
-        console.warn(`⚠️ Falha com o modelo ${modelName}:`, err.message);
-        continue;
-      }
+    const promptParts = [SYSTEM_PROMPT];
+    if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
+    if (audioBase64) {
+      promptParts.push({ inlineData: { data: audioBase64, mimeType: audioMime.split(';')[0] } });
+      promptParts.push("DICA: Transcreva e identifique itens.");
+    }
+    if (imageBase64) {
+      promptParts.push({ inlineData: { data: imageBase64, mimeType: imageMime.split(';')[0] } });
+      promptParts.push("DICA: Analise a imagem.");
     }
 
-    if (!result) throw lastError;
-
-    const responseText = result.response.text();
-    
-    // Limpeza agressiva de JSON (remove inclusive texto fora do bloco json)
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : responseText;
-    const parsed = JSON.parse(jsonStr.replace(/```json|```/g, '').trim());
-
-    
+    const data = await safeGenerate(promptParts);
     return {
-      actions: parsed.actions || [],
-      needsConfirmation: parsed.needsConfirmation || false,
-      reply: parsed.reply || "Ação confirmada! ✅"
+      actions: data.actions || [],
+      needsConfirmation: data.needsConfirmation ?? true,
+      reply: data.reply || "Tudo certo! ✅"
     };
-
   } catch (e) {
     console.error('❌ IA Error:', e.message);
-    const excerpt = e.message.includes('JSON') && result ? result.response.text().slice(0, 100) : '';
     return { 
       actions: [], 
       needsConfirmation: false,
-      reply: `Desculpe, tive um tropeço técnico: ${e.message}. ${excerpt ? 'Tirei isso do áudio: ' + excerpt : 'Pode repetir?'}` 
+      reply: `Desculpe, tive um tropeço técnico: ${e.message}. Pode repetir? 😊` 
     };
   }
 }
 
-
-
-/**
- * ANALISAR ITEM (Proxy para Frontend)
- * Busca categorias, preços e PROMOÇÕES na região do usuário.
- */
-export async function analyzeItemAI(itemName, storesList) {
+export async function analyzeItemAI(itemText, location, stores) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Análise detalhada para o item: "${itemName}".
-    REQUISITOS:
-    1. Determine a categoria adequada.
-    2. Pesquise e estime preços reais e PROMOÇÕES atuais para este item nos supermercados: ${storesList.join(', ')}.
-    3. Busque ser o mais fiel possível aos preços praticados em grandes redes regionais (como BH, EPA, Apoio, Carrefour, etc).
-    4. Se houver promoções conhecidas (ex: leve 3 pague 2, desconto na 2a unidade), leve isso em conta no preço médio.
-
-    Retorne APENAS um JSON:
-    {
-      "category": "String",
-      "prices": { "Nome do Mercado": ValorNumerico },
-      "promoText": "Breve nota sobre promoções encontradas ou 'Preços regulares'"
-    }`;
-
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+    const prompt = `Analise este item de mercado: "${itemText}" em ${location}. 
+    Mercados: ${stores.join(', ')}.
+    Retorne JSON: { "category": "String", "prices": { "Mercado": 5.99 }, "promoText": "String" }`;
+    return await safeGenerate([prompt]);
   } catch (e) {
-    console.error('Erro na análise de IA:', e.message);
-    return { category: 'Outros', prices: {}, promoText: 'Erro na cotação' };
+    return { category: 'Outros', prices: {}, promoText: 'Erro' };
   }
 }
 
-/**
- * BUSCAR MERCADOS NA REGIÃO (Proxy para Frontend)
- */
 export async function findStoresAI(location) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Localize os 5 supermercados mais populares e reais próximos a esta localização: ${location}.
-    Retorne APENAS um JSON:
-    {
-      "city": "Nome da Cidade",
-      "stores": [{"name": "Nome", "address": "Endereço aproximado", "color": "#hex"}]
-    }`;
-
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+    const prompt = `Liste 5 supermercados reais em ${location}. 
+    Retorne JSON: { "city": "Nome", "stores": [{"name": "Loja", "address": "End", "color": "#hex"}] }`;
+    return await safeGenerate([prompt]);
   } catch (e) {
-    console.error('Erro ao buscar mercados:', e.message);
     return { city: 'Desconhecida', stores: [] };
   }
 }
 
-/**
- * ATUALIZAR PREÇOS DA LISTA TODA (Proxy para Frontend)
- */
 export async function refreshPricesAI(location, storesList, itemsList) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Localização: ${location}. 
-    Mercados: ${storesList.join(', ')}.
-    Lista de produtos:
-    ${itemsList.map(i => `- ${i.quantity} ${i.unit} de ${i.name}`).join('\n')}
-    
-    Estime o preço unitário realista em BRL para cada produto em cada um desses mercados.
-    Considere promoções regionais se conhecidas.
-    Retorne APENAS um JSON no formato:
-    {
-      "items": [
-        {
-           "itemName": "nome exato do item",
-           "prices": { "Nome do Mercado": 15.99 }
-        }
-      ]
-    }`;
-
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+    const prompt = `Localização: ${location}. Lojas: ${storesList.join(', ')}.
+    Lista: ${itemsList.map(i => `${i.quantity} ${i.name}`).join(', ')}.
+    Retorne JSON com preços: { "items": [{"itemName": "nome", "prices": {"Loja": 1.99}}] }`;
+    return await safeGenerate([prompt]);
   } catch (e) {
-    console.error('Erro no refresh de preços:', e.message);
     return { items: [] };
   }
 }
 
-/**
- * ANALISAR IMAGEM/CUPOM (Proxy para Frontend)
- */
 export async function handleImageAI(mode, base64, mime, storesList) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Modo: ${mode}. Analise a imagem e extraia os itens de mercado. 
-    Lojas: ${storesList.join(', ')}.
-    Retorne um JSON puro com os itens encontrados (nome, quantidade, unidade, categoria, preço).`;
-
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: base64, mimeType: mime } }
-    ]);
-    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+    const prompt = `Modo: ${mode}. Lojas: ${storesList.join(', ')}. Extraia itens de mercado desta imagem.`;
+    return await safeGenerate([prompt, { inlineData: { data: base64, mimeType: mime.split(';')[0] } }]);
   } catch (e) {
-    console.error('Erro na análise de imagem:', e.message);
     return { items: [] };
   }
 }
 
-/**
- * GERAR RELATÓRIO FINANCEIRO (Proxy para Frontend)
- */
 export async function generateReportAI(data) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Você é um consultor financeiro residencial especialista em economia doméstica. 
-    Analise os gastos da residência atual:
-    
-    DADOS:
-    - Custos Fixos: R$ ${data.fixedCosts}
-    - Custos Variáveis: R$ ${data.varCosts}
-    - Estimativa de Compras: R$ ${data.groceryTotal}
-    - Total Geral: R$ ${data.total}
-    - Detalhes: ${data.details}
-    
-    Forneça uma análise crítica em português estruturada em Markdown com resumo, áreas de redução e dicas específicas.`;
-
-    const result = await model.generateContent(prompt);
-    return { report: result.response.text() };
+    const prompt = `Analise estes gastos domésticos: Fixos R$ ${data.fixedCosts}, Variáveis R$ ${data.varCosts}. Forneça relatório Markdown.
+    Retorne JSON: { "report": "Texto Markdown" }`;
+    return await safeGenerate([prompt]);
   } catch (e) {
-    console.error('Erro no relatório AI:', e.message);
-    return { report: "Erro ao gerar análise I.A." };
+    return { report: "Erro ao gerar relatório." };
   }
 }
-
-
-
