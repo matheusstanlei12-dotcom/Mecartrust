@@ -32,28 +32,40 @@ Sua resposta deve ser EXCLUSIVAMENTE um JSON:
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
     // 1. IA para todos os casos - garante inteligência e evita erros de regex simples
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+    const modelsToTry = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro"];
+    let result = null;
+    let lastError = null;
 
+    for (const modelName of modelsToTry) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const promptParts = [SYSTEM_PROMPT];
 
+        if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
+        
+        if (audioBase64) {
+          const cleanMime = audioMime.split(';')[0];
+          promptParts.push({ inlineData: { data: audioBase64, mimeType: cleanMime } });
+          promptParts.push("DICA: Transcreva o áudio acima e extraia itens.");
+        }
 
-    const promptParts = [SYSTEM_PROMPT];
+        if (imageBase64) {
+          const cleanMime = imageMime.split(';')[0];
+          promptParts.push({ inlineData: { data: imageBase64, mimeType: cleanMime } });
+          promptParts.push("DICA: Analise a imagem.");
+        }
 
-    if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
-    
-    if (audioBase64) {
-      // Limpa mimetype que pode vir com codecs (ex: audio/ogg; codecs=opus)
-      const cleanMime = audioMime.split(';')[0];
-      promptParts.push({ inlineData: { data: audioBase64, mimeType: cleanMime } });
-      promptParts.push("IMPORTANTE: O usuário enviou um áudio. Transcreva o áudio acima e aplique as REGRAS DE OURO para extrair os itens.");
+        result = await model.generateContent(promptParts);
+        if (result) break; // Sucesso!
+      } catch (err) {
+        lastError = err;
+        console.warn(`⚠️ Falha com o modelo ${modelName}:`, err.message);
+        continue;
+      }
     }
 
-    if (imageBase64) {
-      const cleanMime = imageMime.split(';')[0];
-      promptParts.push({ inlineData: { data: imageBase64, mimeType: cleanMime } });
-      promptParts.push("Analise a imagem acima e extraia itens de mercado seguindo o formato JSON solicitado.");
-    }
+    if (!result) throw lastError;
 
-    const result = await model.generateContent(promptParts);
     const responseText = result.response.text();
     
     // Limpeza agressiva de JSON (remove inclusive texto fora do bloco json)
