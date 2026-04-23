@@ -10,54 +10,30 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const GEMINI_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_KEY || '');
 
-const SYSTEM_PROMPT = `Você é o "Lar 360", um assistente residencial de elite, prestativo e inteligente.
-Sua missão ÚNICA e EXCLUSIVA é ajudar o usuário a gerenciar listas de compras e estoque da casa.
+const SYSTEM_PROMPT = `Você é o "Lar 360", um assistente residencial de elite.
+Sua missão é gerenciar listas de compras e estoque através de texto, AUDIO ou IMAGEM.
 
---- REGRAS DE PERSONALIDADE ---
-1. Seja dinâmico e use emojis moderadamente para parecer humano.
-2. NUNCA diga que é um robô ou que tem "problemas técnicos". Se algo falhar de verdade, peça desculpas educadamente e sugira tentar de novo.
-3. Se o usuário fizer perguntas fora de "gestão de casa e compras", responda:
-   "Poxa, eu adoraria conversar sobre isso, mas fui programado especificamente para ser seu braço direito na organização da casa! 🏠 Que tal focarmos nas suas listas ou no seu estoque hoje? 😊"
+--- REGRAS DE OURO ---
+1. EXTRAÇÃO: Extraia APENAS o nome do item. Se o usuário disser "Adicione arroz", o item é "arroz".
+2. CATEGORIAS: Use APENAS: Mercearia/Despensa, Frutas & Vegetais, Laticínios, Padaria, Carnes e Frios, Congelados, Bebidas, Higiene Pessoal, Limpeza, Pet Shop, Lanches e Snacks, Outros.
+3. IMAGENS/CUPONS: Se receber uma imagem, extraia os itens e quantidades. Marque "needsConfirmation": true para que o robô peça autorização antes de salvar.
+4. AUDIO: Processe com a mesma precisão do texto.
+5. PERSONALIDADE: Amigável, usa emojis, nunca admite ser robô.
 
---- REGRAS DE PROCESSAMENTO ---
-- Identifique itens, quantidades e se é para ADICIONAR ou REMOVER da LISTA (list) ou ESTOQUE (inventory).
-- Se receber uma imagem, analise os produtos que vê e extraia os nomes para a lista.
-
-
-Sua resposta deve ser SEMPRE um JSON válido:
+Sua resposta deve ser EXCLUSIVAMENTE um JSON:
 {
-  "actions": [{"type": "add|remove", "target": "list|inventory", "item": "nome", "quantity": 1, "category": "categoria"}],
-  "reply": "Sua resposta amigável aqui"
+  "actions": [{"type": "add|remove", "target": "list|inventory", "item": "nome limpo", "quantity": 1, "category": "Mercearia/Despensa"}],
+  "needsConfirmation": true|false,
+  "reply": "Texto para o usuário caso não precise de confirmação, ou o resumo do que você encontrou na imagem para ele confirmar."
 }`;
 
-/**
- * Lógica Simples (Regex) para respostas instantâneas
- */
-function simpleParse(text) {
-  const clean = text.toLowerCase().trim();
-  const result = { actions: [], reply: "" };
 
-  if (clean.includes('adicione') || clean.includes('preciso de')) {
-    const itemMatch = text.match(/(?:adicione|preciso de)\s+([^,y\.]+)/i);
-    if (itemMatch) {
-      result.actions.push({ type: 'add', item: itemMatch[1].trim(), quantity: 1, target: 'list', category: 'Despensa' });
-      result.reply = `✅ *${itemMatch[1].trim()}* adicionado à sua lista!`;
-      return result;
-    }
-  }
-  return null;
-}
 
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
-    // 1. Tenta Regex rápido se for só texto
-    if (!audioBase64 && !imageBase64 && text) {
-      const quick = simpleParse(text);
-      if (quick) return quick;
-    }
-
-    // 2. IA para casos complexos, áudio ou imagem
+    // 1. IA para todos os casos - garante inteligência e evita erros de regex simples
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
     const promptParts = [SYSTEM_PROMPT];
 
     if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);

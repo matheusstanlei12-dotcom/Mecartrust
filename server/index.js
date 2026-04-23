@@ -198,26 +198,25 @@ async function sendWelcomeMessage(docId, user) {
   const rawPhone = String(user.phone).replace(/\D/g, '');
   const fullPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
 
-  const welcomeText = `🎉 Olá, *${userName}*! Bem-vindo ao *MercaTrust*! 🥳\n\nSou seu assistente inteligente de estoque. Funciona assim:\n\n📦 Para adicionar à lista de compras, me mande:\n_"Preciso de leite e arroz"_\n\n🎤 Ou mande um *áudio* falando o que está faltando!\n\nVamos começar? 🚀`;
+  const welcomeText = `✨ *OLÁ, ${userName.toUpperCase()}!* ✨\n\nQue honra ter você no *Lar 360*! 🏠\n\nA partir de agora, eu serei sua dupla dinâmica na organização da sua casa. Esqueça papel e caneta! 📝✂️\n\n🔹 *O QUE VOCÊ PODE FAZER COMIGO?*\n\n🛒 *Listas Rápidas*: Só me diga "Adicione café e pão" ou mande um *áudio*!\n📦 *Controle de Estoque*: "Comprei 3 leites" ou "Acabou o arroz".\n📸 *Visão Inteligente*: Mande uma foto do seu *cupom fiscal* ou da sua despensa e eu faço o trabalho duro de ler tudo para você!\n\nEstou pronto para organizar sua vida. O que vamos planejar hoje? 🚀😉`;
 
   try {
     setTimeout(async () => {
       const contactId = await client.getNumberId(fullPhone);
       if (contactId) {
         await client.sendMessage(contactId._serialized, welcomeText);
-        console.log(`✅ Boas-vindas enviadas para ${userName} (+${fullPhone})`);
+        console.log(`✅ Incrível mensagem de boas-vindas enviada para ${userName}`);
         await db.collection('users').doc(docId).update({
           welcomed: true,
           whatsappId: contactId._serialized.split('@')[0]
         });
-      } else {
-        console.error(`❌ Número inválido: +${fullPhone}`);
       }
-    }, 5000);
+    }, 4000);
   } catch (err) {
-    console.error('❌ Erro ao enviar boas-vindas:', err.message);
+    console.error('❌ Erro no Welcome:', err.message);
   }
 }
+
 
 // ─── 8. BUSCAR USUÁRIO PELO TELEFONE ─────────────────────────────────────────
 async function getUserByPhone(phone) {
@@ -225,7 +224,7 @@ async function getUserByPhone(phone) {
   
   // Busca pelo whatsappId (ex: 5531973368101)
   let snap = await db.collection('users').where('whatsappId', '==', cleanPhone).get();
-  if (!snap.empty) return snap.docs[0].data();
+  if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
   
   // Fallback pelos últimos 8 dígitos do phone salvo
   const allUsers = await db.collection('users').get();
@@ -233,10 +232,13 @@ async function getUserByPhone(phone) {
   let found = null;
   allUsers.forEach(doc => {
     const d = doc.data();
-    if (d.phone && String(d.phone).slice(-8) === last8) found = d;
+    if (d.phone && String(d.phone).slice(-8) === last8) {
+      found = { id: doc.id, ...d };
+    }
   });
   return found;
 }
+
 
 // ─── 9. PROCESSAR MENSAGENS RECEBIDAS ────────────────────────────────────────
 client.on('message', async (msg) => {
@@ -244,86 +246,99 @@ client.on('message', async (msg) => {
   if (chat.isGroup) return;
 
   const authorPhone = msg.from.split('@')[0];
-  const text = msg.body || '';
+  const text = (msg.body || '').trim().toLowerCase();
   console.log(`📨 Mensagem de +${authorPhone}: "${text}"`);
 
-  // Buscar nome do usuário no banco
+  // Buscar usuário no banco
   const userData = await getUserByPhone(authorPhone);
-  const firstName = userData?.name ? userData.name.split(' ')[0] : null;
+  if (!userData) {
+    // Se for a primeira vez e não achou no banco, pede cadastro
+    await msg.reply("Olá! 👋 Notei que você ainda não tem uma conta no *Lar 360*. Acesse nosso site para se cadastrar e começar a usar o robô! 🏠✨");
+    return;
+  }
+  
+  const uid = userData.id;
+  const firstName = userData.name ? userData.name.split(' ')[0] : 'amigo(a)';
 
-  // Saudações — resposta personalizada
+  // 1. FLUXO DE CONFIRMAÇÃO (SIM/NÃO)
+  if (['sim', 'confirmar', 'pode', 'ok', 'pode ser', 'vrai'].includes(text)) {
+    const pendingRef = db.collection('users').doc(uid).collection('temp').doc('pendingAction');
+    const pendingSnap = await pendingRef.get();
+    
+    if (pendingSnap.exists) {
+      const { actions } = pendingSnap.data();
+      await msg.reply(`Perfeito, *${firstName}*! ✨ Analisando e salvando tudo agora... ⏳`);
+      const dbStatus = await processInventoryActions(authorPhone, actions);
+      await msg.reply(dbStatus || "Tudo pronto! Seus itens já estão no sistema. ✅");
+      await pendingRef.delete();
+      return;
+    }
+  }
+
+  if (['não', 'nao', 'cancelar', 'esquece'].includes(text)) {
+    await db.collection('users').doc(uid).collection('temp').doc('pendingAction').delete();
+    await msg.reply(`Sem problemas! 👌 Cancelei a operação. O que mais posso fazer por você?`);
+    return;
+  }
+
+  // 2. SAUDAÇÕES PREMIUM
   const greetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'hi'];
-  if (greetings.includes(text.trim().toLowerCase())) {
-    const saudacao = firstName
-      ? `Olá, *${firstName}*! 👋 Que bom te ver por aqui!\n\n`
-      : `Olá! 👋 Bem-vindo ao *MercaTrust*!\n\n`;
-
+  if (greetings.includes(text)) {
     await msg.reply(
-      saudacao +
-      `Sou seu assistente de compras inteligente. Veja o que posso fazer:\n\n` +
-      `🛒 *Adicionar à lista* — "Preciso de leite e arroz"\n` +
-      `🎤 *Por áudio* — Mande um áudio falando o que falta\n` +
-      `📦 *Registrar estoque* — "Guardei 2 pacotes de macarrão"\n` +
-      `❌ *Remover* — "Tirei o detergente do estoque"\n\n` +
-      `O que vamos fazer hoje? 😊`
+      `Olá, *${firstName}*! ❤️ Que alegria ver você por aqui de novo!\n\n` +
+      `Estou pronto para te ajudar a organizar a casa. O que vamos planejar hoje? 🤔\n\n` +
+      `📌 *Dica:* Você pode me mandar um *áudio* ou uma *foto do cupom* que eu cuido de tudo para você! 🚀`
     );
     return;
   }
 
-  // "ajuda" ou "menu"
-  if (['ajuda', 'help', 'menu', '?'].includes(text.trim().toLowerCase())) {
-    await msg.reply(
-      `📋 *Comandos disponíveis:*\n\n` +
-      `🛒 Para *adicionar na lista*:\n_"Preciso de arroz, leite e sabão"_\n\n` +
-      `📦 Para *registrar no estoque*:\n_"Comprei 3 pacotes de macarrão"_\n\n` +
-      `❌ Para *remover do estoque*:\n_"Acabei o azeite"_\n\n` +
-      `🎤 Você também pode mandar *áudios*!\n\n` +
-      `_Acesse o app para ver sua lista completa_ 📱`
-    );
-    return;
-  }
-
-  let audioBase64 = null;
-  let audioMime = null;
-  let imageBase64 = null;
-  let imageMime = null;
+  // 3. PROCESSAMENTO VIA IA (TEXTO, ÁUDIO OU IMAGEM)
+  let audioBase64 = null, audioMime = null, imageBase64 = null, imageMime = null;
 
   if (msg.hasMedia) {
     const media = await msg.downloadMedia();
     if (media) {
       if (media.mimetype.includes('audio')) {
-        audioBase64 = media.data;
-        audioMime = media.mimetype;
-        const audioPre = firstName ? `🎤 Ouvi você, *${firstName}*! Processando...` : '🎤 Processando seu áudio...';
-        await msg.reply(audioPre);
+        audioBase64 = media.data; audioMime = media.mimetype;
+        await msg.reply(`🎤 Ouvi você, *${firstName}*! Deixa eu processar esse áudio...`);
       } else if (media.mimetype.includes('image')) {
-        imageBase64 = media.data;
-        imageMime = media.mimetype;
-        const imagePre = firstName ? `📸 Deixa eu ver isso aqui, *${firstName}*...` : '📸 Analisando sua foto...';
-        await msg.reply(imagePre);
+        imageBase64 = media.data; imageMime = media.mimetype;
+        await msg.reply(`📸 Deixa eu dar uma olhada nessa imagem, *${firstName}*...`);
       }
     }
   } else {
-    const textPre = firstName ? `⏳ Anotando isso, *${firstName}*...` : '⏳ Processando...';
-    await msg.reply(textPre);
+    // Apenas se não for um comando curto
+    if (text.length > 2) {
+      await msg.reply(`⏳ Anotando isso, *${firstName}*...`);
+    }
   }
 
   try {
     const result = await processInventoryMessage(text, audioBase64, audioMime, firstName, imageBase64, imageMime);
-    console.log('🤖 IA:', JSON.stringify(result));
-
-    if (result.actions && result.actions.length > 0) {
+    
+    if (result.needsConfirmation && result.actions.length > 0) {
+      // Salva itens temporários para confirmação
+      await db.collection('users').doc(uid).collection('temp').doc('pendingAction').set({
+        actions: result.actions,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      await msg.reply(
+        `📜 *IDENTIFIQUEI ESSES ITENS:* \n\n${result.reply}\n\n` +
+        `✅ *Posso adicionar todos à sua lista?* (Responda "Sim" para confirmar)`
+      );
+    } else if (result.actions && result.actions.length > 0) {
       const dbStatus = await processInventoryActions(authorPhone, result.actions);
-      await msg.reply(dbStatus || result.reply || "Tudo certo! Já organizei isso para você. ✅");
+      await msg.reply(dbStatus || result.reply || "Tudo certo! Salvei para você. ✅");
     } else {
-      // Se não houver ações (ex: pergunta fora de tópico ou saudação)
-      await msg.reply(result.reply || "Pode repetir? Não consegui entender o item. 🤔");
+      await msg.reply(result.reply || "Poxa, não consegui entender o item. Pode repetir? 🤔");
     }
   } catch (err) {
     console.error('💥 Erro:', err.message);
     await msg.reply('Poxa, me perdi por um segundo! 😅 Pode repetir de um jeito mais simples? 😊');
   }
 });
+
 
 // ─── 10. INICIALIZAÇÃO DO ROBÔ ────────────────────────────────────────────────
 function initBot() {
