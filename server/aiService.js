@@ -28,38 +28,23 @@ Retorne EXCLUSIVAMENTE um JSON:
 
 async function safeGenerate(promptParts) {
   const start = Date.now();
-  console.log(`[IA Trace] Iniciando safeGenerate...`);
+  console.log(`[IA Trace] Iniciando safeGenerate (MODO PRO)...`);
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
-    const result = await model.generateContent(promptParts);
+    // Tira qualquer conteúdo binário do prompt pois o gemini-pro (1.0) não aceita
+    const textOnly = promptParts.filter(p => typeof p === 'string');
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    
+    const result = await model.generateContent(textOnly);
     const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
   } catch (err) {
-    console.error(`[IA Trace] Falha na primeira tentativa:`, err.message);
-    
-    // Se falhou e tinha áudio/imagem, tenta APENAS TEXTO como última esperança
-    if (promptParts.some(p => typeof p !== 'string')) {
-      console.warn("[IA Trace] Retentando APENAS TEXTO...");
-      const textOnly = promptParts.filter(p => typeof p === 'string');
-      textOnly.push("AVISO: O áudio/imagem falhou. Ignore o áudio e responda apenas ao texto se houver.");
-      
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
-      const result = await model.generateContent(textOnly);
-      const text = result.response.text();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
-      
-      // Adiciona aviso no reply para o usuário saber que o áudio falhou
-      if (parsed.reply) {
-        parsed.reply = "⚠️ (Não consegui ouvir o áudio, processando apenas texto): " + parsed.reply;
-      }
-      return parsed;
-    }
+    console.error(`[IA Trace] Falha no gemini-pro:`, err.message);
     throw err;
   }
 }
+
 
 
 
