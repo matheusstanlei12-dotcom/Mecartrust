@@ -2537,7 +2537,7 @@ export default function App() {
                     })()}
                   </>
                 )}
-}
+
               </div>
 
               {/* Action Footer */}
