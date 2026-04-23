@@ -49,6 +49,28 @@ async function safeGenerate(promptParts) {
 
 
 
+function emergencyRegexFallback(text) {
+  console.log("[IA Fallback] Ativando Motor de Emergência (Regex)...");
+  const clean = String(text).toLowerCase().trim();
+  let action = { type: 'add', target: 'list', item: '', quantity: 1, unit: 'un', category: 'Outros' };
+  
+  // Regex simples para capturar item e quantidade
+  const addMatch = clean.match(/(?:adicione|coloca|poe|quero|pega|compra)\s+(?:(\d+)\s+)?(.*)/);
+  if (addMatch) {
+    action.quantity = parseInt(addMatch[1]) || 1;
+    action.item = addMatch[2].trim();
+  } else {
+    // Se não bateu regex, assume que o texto todo é o item
+    action.item = clean;
+  }
+
+  return {
+    actions: action.item ? [action] : [],
+    needsConfirmation: true,
+    reply: action.item ? `(Modo de Emergência) Entendi: ${action.quantity}x ${action.item}.` : "Não entendi o item, mas estou em modo de emergência."
+  };
+}
+
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
     const promptParts = [SYSTEM_PROMPT];
@@ -69,14 +91,19 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
       reply: data.reply || "Tudo certo! ✅"
     };
   } catch (e) {
-    console.error('❌ IA Error:', e.message);
+    console.error('❌ IA Error (Acionando Fallback):', e.message);
+    // Se for texto, tenta o fallback manual
+    if (text) {
+      return emergencyRegexFallback(text);
+    }
     return { 
       actions: [], 
       needsConfirmation: false,
-      reply: `Desculpe, tive um tropeço técnico: ${e.message}. Pode repetir? 😊` 
+      reply: `Desculpe, tive um tropeço técnico crítico: ${e.message}.` 
     };
   }
 }
+
 
 export async function analyzeItemAI(itemText, location, stores) {
   try {
