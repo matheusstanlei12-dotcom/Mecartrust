@@ -1054,35 +1054,23 @@ export default function App() {
   const analyzeItem = async (itemName: string, itemId: string, listName: string, baseList?: GroceryItem[]) => {
     if (!user || !selectedResidenceId) return;
     try {
-      const model = ai.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.OBJECT,
-            properties: {
-              category: { type: SchemaType.STRING },
-              prices: {
-                type: SchemaType.OBJECT,
-                properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: SchemaType.NUMBER } }), {})
-              }
-            }
-          }
-        }
+      // Chamada via Proxy (Servidor) para evitar erros de API Key no navegador e ter dados melhores
+      const response = await fetch('/api/ai/analyze-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemName, stores: stores.map(s => s.name) })
       });
-
-      const response = await model.generateContent(`Analise o item de mercado "${itemName}". 
-        Determine a categoria entre: ${DEFAULT_CATEGORIES.join(', ')}.
-        Estime o preço médio em Reais (BRL) para os seguintes supermercados reais de Belo Horizonte/MG: ${stores.map(s => s.name).join(', ')}.
-        Seja realista com os preços praticados nessas redes (BH, EPA, Apoio).
-        Retorne um JSON puro.`);
-
-      const data = JSON.parse(response.response.text() || '{}');
       
-      // Use provided baseList or current state
+      const data = await response.json();
+      
       const currentListItems = baseList || lists[listName] || [];
       const listData = currentListItems.map(item => 
-        item.id === itemId ? { ...item, category: data.category || 'Outros', prices: data.prices || item.prices } : item
+        item.id === itemId ? { 
+          ...item, 
+          category: data.category || item.category, 
+          prices: data.prices || item.prices,
+          promoNote: data.promoText // Nova nota de promoção
+        } : item
       );
 
       await setDoc(doc(db, `residences/${selectedResidenceId}/lists`, listName), {
@@ -1093,6 +1081,7 @@ export default function App() {
       console.error("Erro ao analisar item:", error);
     }
   };
+
 
   const checkAndRefill = async (item: InventoryItem) => {
     if (!user || !selectedResidenceId) return;
@@ -1158,7 +1147,7 @@ export default function App() {
         },
         (error) => {
           console.error("Erro ao obter localização:", error);
-          findLocalStores(); // Fallback to generic city
+          findLocalStores();
         }
       );
     } else {
@@ -1169,53 +1158,30 @@ export default function App() {
   const findLocalStores = async (lat?: number, lon?: number) => {
     setIsSearchingStores(true);
     try {
-      let locationQuery = "Brasil";
-      if (lat && lon) {
-        locationQuery = `latitude: ${lat}, longitude: ${lon}`;
-      }
-
-      const model = ai.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.OBJECT,
-            properties: {
-              city: { type: SchemaType.STRING },
-              stores: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    name: { type: SchemaType.STRING },
-                    icon: { type: SchemaType.STRING }
-                  }
-                }
-              }
-            }
-          }
-        }
+      const locationQuery = lat && lon ? `${lat}, ${lon}` : "Minha Região";
+      
+      const response = await fetch('/api/ai/find-stores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: locationQuery })
       });
-
-      const response = await model.generateContent(`Encontre os nomes de 3 supermercados reais e grandes próximos a esta localização: ${locationQuery}. Se não encontrar uma localização exata, use a capital mais próxima no Brasil. 
-        Retorne um JSON com a propriedade "city" (nome da cidade) e "stores" (array de objetos com "name" e "icon" que deve ser um emoji de mercado).`);
-
-      const data = JSON.parse(response.response.text() || '{}');
+      
+      const data = await response.json();
+      
       if (data.stores && data.stores.length > 0) {
         setStores(data.stores);
         setSelectedStore(data.stores[0].name);
-        setLocationName(data.city);
-        localStorage.setItem('lar360_last_location', data.city);
+        if (data.city) setLocationName(data.city);
       }
     } catch (error) {
       console.error("Erro ao buscar supermercados locais:", error);
-      // Fallback em caso de erro na API ou localização
       setStores(STORES_INITIAL);
       setLocationName("Belo Horizonte (Padrão)");
     } finally {
       setIsSearchingStores(false);
     }
   };
+
 
   const addItem = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -2458,8 +2424,16 @@ export default function App() {
                                   <span className={`text-[13px] font-bold ${item.checked ? 'line-through text-[#9E9E9E]' : 'text-[#333]'}`}>
                                     {item.name}
                                   </span>
-                                  <span className="text-[9px] text-[#9E9E9E] font-medium uppercase tracking-tight">{(item.category || 'Geral')}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] text-[#9E9E9E] font-black uppercase tracking-tight">{(item.category || 'Geral')}</span>
+                                    {item.promoNote && (
+                                      <span className="text-[8px] bg-accent/10 text-accent px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest flex items-center gap-1">
+                                        <Zap size={8} fill="currentColor" /> {item.promoNote}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+
 
                                 <div className="text-center bg-[#f8f9fa] py-1 px-2 rounded-lg border border-border-main/50">
                                   <span className="text-[11px] font-black text-primary">
@@ -2542,6 +2516,7 @@ export default function App() {
 
               {/* Action Footer */}
               <div className="pt-5 mt-4 border-t-2 border-dashed border-border-main">
+
                 <button 
                   onClick={finishList}
                   disabled={items.length === 0}

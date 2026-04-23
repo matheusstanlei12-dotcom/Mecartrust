@@ -7,14 +7,15 @@ import qrcode from 'qrcode-terminal';
 import express from 'express';
 import http from 'http';
 
-const app_express = express();
-const server_http = http.createServer(app_express);
-
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
-import { processInventoryMessage } from './aiService.js';
+import { processInventoryMessage, analyzeItemAI, findStoresAI } from './aiService.js';
 import { FirestoreStore } from './sessionStore.js';
 
 // ─── 1. INICIALIZAR BANCO ────────────────────────────────────────────────────
+const app_express = express();
+app_express.use(express.json()); // Habilita JSON no corpo das requisições
+const server_http = http.createServer(app_express);
+
 const hasDB = initFirebase();
 if (!hasDB) {
   console.error('FATAL: Firebase não inicializado. Encerrando.');
@@ -43,6 +44,27 @@ app_express.get('/status', (req, res) => {
     hasQr: !!lastQr,
     timestamp: new Date().toISOString()
   });
+});
+
+// Proxy para Análise de IA (Evita erro de API KEY no Frontend)
+app_express.post('/api/ai/analyze-item', async (req, res) => {
+  try {
+    const { itemName, stores } = req.body;
+    const result = await analyzeItemAI(itemName, stores);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app_express.post('/api/ai/find-stores', async (req, res) => {
+  try {
+    const { location } = req.body;
+    const result = await findStoresAI(location);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Página do QR Code

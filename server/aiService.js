@@ -57,6 +57,7 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     
     return {
       actions: parsed.actions || [],
+      needsConfirmation: parsed.needsConfirmation || false,
       reply: parsed.reply || "Ação confirmada! ✅"
     };
 
@@ -64,7 +65,59 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     console.error('❌ IA Error:', e.message);
     return { 
       actions: [], 
+      needsConfirmation: false,
       reply: "Desculpe, tive um pequeno tropeço aqui. Pode repetir de um jeito mais simples? 😊" 
     };
   }
 }
+
+/**
+ * ANALISAR ITEM (Proxy para Frontend)
+ * Busca categorias, preços e PROMOÇÕES na região do usuário.
+ */
+export async function analyzeItemAI(itemName, storesList) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Análise detalhada para o item: "${itemName}".
+    REQUISITOS:
+    1. Determine a categoria adequada.
+    2. Pesquise e estime preços reais e PROMOÇÕES atuais para este item nos supermercados: ${storesList.join(', ')}.
+    3. Busque ser o mais fiel possível aos preços praticados em grandes redes regionais (como BH, EPA, Apoio, Carrefour, etc).
+    4. Se houver promoções conhecidas (ex: leve 3 pague 2, desconto na 2a unidade), leve isso em conta no preço médio.
+
+    Retorne APENAS um JSON:
+    {
+      "category": "String",
+      "prices": { "Nome do Mercado": ValorNumerico },
+      "promoText": "Breve nota sobre promoções encontradas ou 'Preços regulares'"
+    }`;
+
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+  } catch (e) {
+    console.error('Erro na análise de IA:', e.message);
+    return { category: 'Outros', prices: {}, promoText: 'Erro na cotação' };
+  }
+}
+
+/**
+ * BUSCAR MERCADOS NA REGIÃO (Proxy para Frontend)
+ */
+export async function findStoresAI(location) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Localize os 5 supermercados mais populares e reais próximos a esta localização: ${location}.
+    Retorne APENAS um JSON:
+    {
+      "city": "Nome da Cidade",
+      "stores": [{"name": "Nome", "address": "Endereço aproximado", "color": "#hex"}]
+    }`;
+
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+  } catch (e) {
+    console.error('Erro ao buscar mercados:', e.message);
+    return { city: 'Desconhecida', stores: [] };
+  }
+}
+
