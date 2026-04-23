@@ -71,10 +71,11 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     return { 
       actions: [], 
       needsConfirmation: false,
-      reply: "Desculpe, tive um pequeno tropeço aqui. Pode repetir de um jeito mais simples? 😊" 
+      reply: `Desculpe, tive um pequeno tropeço aqui: ${e.message}. Pode repetir? 😊` 
     };
   }
 }
+
 
 /**
  * ANALISAR ITEM (Proxy para Frontend)
