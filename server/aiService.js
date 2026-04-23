@@ -27,12 +27,36 @@ Retorne EXCLUSIVAMENTE um JSON:
 }`;
 
 async function safeGenerate(promptParts) {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(promptParts);
-  const text = result.response.text();
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+  const start = Date.now();
+  const keySnippet = (GEMINI_KEY || '').substring(0, 5);
+  console.log(`[IA Trace] Iniciando safeGenerate. Key: ${keySnippet}...`);
+
+  return new Promise(async (resolve, reject) => {
+    const timeout = setTimeout(() => {
+      console.error(`[IA Trace] TIMEOUT atingido após ${Date.now() - start}ms`);
+      reject(new Error("A IA demorou muito para responder (Timeout)"));
+    }, 20000);
+
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      console.log(`[IA Trace] Enviando prompt para Gemini...`);
+      const result = await model.generateContent(promptParts);
+      clearTimeout(timeout);
+      
+      const text = result.response.text();
+      console.log(`[IA Trace] Resposta recebida (${Date.now() - start}ms).`);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+      resolve(parsed);
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error(`[IA Trace] Erro na geração:`, err.message);
+      reject(err);
+    }
+  });
 }
+
 
 
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {

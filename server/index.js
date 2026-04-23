@@ -374,10 +374,12 @@ client.on('message', async (msg) => {
   }
 
   try {
+    console.log(`[Bot Trace] Processando mensagem...`);
     const result = await processInventoryMessage(text, audioBase64, audioMime, firstName, imageBase64, imageMime);
+    console.log(`[Bot Trace] Resultado da IA obtido.`);
     
     if (result.needsConfirmation && result.actions.length > 0) {
-      // Salva itens temporários para confirmação
+      console.log(`[Bot Trace] Salvando pendente para confirmação...`);
       await db.collection('users').doc(uid).collection('temp').doc('pendingAction').set({
         actions: result.actions,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
@@ -387,17 +389,22 @@ client.on('message', async (msg) => {
         `📜 *IDENTIFIQUEI ESSES ITENS:* \n\n${result.reply}\n\n` +
         `✅ *Posso adicionar todos à sua lista?* (Responda "Sim" para confirmar)`
       );
+      console.log(`[Bot Trace] Resposta de confirmação enviada.`);
     } else if (result.actions && result.actions.length > 0) {
+      console.log(`[Bot Trace] Processando ações diretas...`);
       const dbStatus = await processInventoryActions(authorPhone, result.actions);
       await msg.reply(dbStatus || result.reply || "Tudo certo! Salvei para você. ✅");
+      console.log(`[Bot Trace] Resposta de sucesso direta enviada.`);
     } else {
+      console.log(`[Bot Trace] Nenhuma ação identificada.`);
       await msg.reply(result.reply || "Poxa, não consegui entender o item. Pode repetir? 🤔");
     }
   } catch (err) {
-    console.error('💥 Erro:', err.message);
-    await msg.reply('Poxa, me perdi por um segundo! 😅 Pode repetir de um jeito mais simples? 😊');
+    console.error('💥 Erro Crítico no Handler:', err.message);
+    await msg.reply(`⚠️ Tive um erro interno: ${err.message}. Pode tentar de novo em instantes?`);
   }
 });
+
 
 
 // ─── 10. INICIALIZAÇÃO DO ROBÔ ────────────────────────────────────────────────
