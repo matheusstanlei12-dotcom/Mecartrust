@@ -27,27 +27,13 @@ Retorne EXCLUSIVAMENTE um JSON:
 }`;
 
 async function safeGenerate(promptParts) {
-  const modelsToTry = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro"];
-  let lastError = null;
-
-  for (const modelName of modelsToTry) {
-    try {
-      // Forçamos v1 para evitar o erro de 404 na v1beta que o Google está disparando
-      const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
-      const result = await model.generateContent(promptParts);
-
-      if (result) {
-        const text = result.response.text();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
-      }
-    } catch (err) {
-      lastError = err;
-      console.warn(`⚠️ Modelo ${modelName} falhou:`, err.message);
-    }
-  }
-  throw lastError || new Error("Falha total na IA");
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(promptParts);
+  const text = result.response.text();
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
 }
+
 
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
