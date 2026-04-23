@@ -7,7 +7,9 @@ import qrcode from 'qrcode-terminal';
 import express from 'express';
 import http from 'http';
 
+import admin from 'firebase-admin';
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
+
 import { processInventoryMessage, analyzeItemAI, findStoresAI, refreshPricesAI, handleImageAI, generateReportAI } from './aiService.js';
 
 import { FirestoreStore } from './sessionStore.js';
