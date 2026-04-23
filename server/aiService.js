@@ -121,3 +121,83 @@ export async function findStoresAI(location) {
   }
 }
 
+/**
+ * ATUALIZAR PREÇOS DA LISTA TODA (Proxy para Frontend)
+ */
+export async function refreshPricesAI(location, storesList, itemsList) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Localização: ${location}. 
+    Mercados: ${storesList.join(', ')}.
+    Lista de produtos:
+    ${itemsList.map(i => `- ${i.quantity} ${i.unit} de ${i.name}`).join('\n')}
+    
+    Estime o preço unitário realista em BRL para cada produto em cada um desses mercados.
+    Considere promoções regionais se conhecidas.
+    Retorne APENAS um JSON no formato:
+    {
+      "items": [
+        {
+           "itemName": "nome exato do item",
+           "prices": { "Nome do Mercado": 15.99 }
+        }
+      ]
+    }`;
+
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+  } catch (e) {
+    console.error('Erro no refresh de preços:', e.message);
+    return { items: [] };
+  }
+}
+
+/**
+ * ANALISAR IMAGEM/CUPOM (Proxy para Frontend)
+ */
+export async function handleImageAI(mode, base64, mime, storesList) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Modo: ${mode}. Analise a imagem e extraia os itens de mercado. 
+    Lojas: ${storesList.join(', ')}.
+    Retorne um JSON puro com os itens encontrados (nome, quantidade, unidade, categoria, preço).`;
+
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: base64, mimeType: mime } }
+    ]);
+    return JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+  } catch (e) {
+    console.error('Erro na análise de imagem:', e.message);
+    return { items: [] };
+  }
+}
+
+/**
+ * GERAR RELATÓRIO FINANCEIRO (Proxy para Frontend)
+ */
+export async function generateReportAI(data) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Você é um consultor financeiro residencial especialista em economia doméstica. 
+    Analise os gastos da residência atual:
+    
+    DADOS:
+    - Custos Fixos: R$ ${data.fixedCosts}
+    - Custos Variáveis: R$ ${data.varCosts}
+    - Estimativa de Compras: R$ ${data.groceryTotal}
+    - Total Geral: R$ ${data.total}
+    - Detalhes: ${data.details}
+    
+    Forneça uma análise crítica em português estruturada em Markdown com resumo, áreas de redução e dicas específicas.`;
+
+    const result = await model.generateContent(prompt);
+    return { report: result.response.text() };
+  } catch (e) {
+    console.error('Erro no relatório AI:', e.message);
+    return { report: "Erro ao gerar análise I.A." };
+  }
+}
+
+
+

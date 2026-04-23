@@ -8,13 +8,15 @@ import express from 'express';
 import http from 'http';
 
 import { initFirebase, processInventoryActions, db } from './firebaseAdmin.js';
-import { processInventoryMessage, analyzeItemAI, findStoresAI } from './aiService.js';
+import { processInventoryMessage, analyzeItemAI, findStoresAI, refreshPricesAI, handleImageAI, generateReportAI } from './aiService.js';
+
 import { FirestoreStore } from './sessionStore.js';
 
 // ─── 1. INICIALIZAR BANCO ────────────────────────────────────────────────────
 const app_express = express();
-app_express.use(express.json()); // Habilita JSON no corpo das requisições
+app_express.use(express.json({ limit: '20mb' })); // Aumenta limite para imagens
 const server_http = http.createServer(app_express);
+
 
 const hasDB = initFirebase();
 if (!hasDB) {
@@ -67,7 +69,38 @@ app_express.post('/api/ai/find-stores', async (req, res) => {
   }
 });
 
+app_express.post('/api/ai/refresh-prices', async (req, res) => {
+  try {
+    const { location, stores, items } = req.body;
+    const result = await refreshPricesAI(location, stores, items);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app_express.post('/api/ai/process-image', async (req, res) => {
+  try {
+    const { mode, base64, mime, stores } = req.body;
+    const result = await handleImageAI(mode, base64, mime, stores);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app_express.post('/api/ai/generate-report', async (req, res) => {
+  try {
+    const result = await generateReportAI(req.body);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Página do QR Code
+
+
 app_express.get('/qr', (req, res) => {
   if (botReady) {
     return res.send(`

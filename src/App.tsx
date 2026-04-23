@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+
 
 import { initializeApp } from 'firebase/app';
 import { 
@@ -613,31 +613,25 @@ export default function App() {
     const details = finances.map(f => `${f.description}: R$ ${safeToFixed(f.value)} (${f.type})`).join(', ');
 
     try {
-      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const response = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: `Você é um consultor financeiro residencial especialista em economia doméstica. 
-        Analise os gastos da residência atual para o mês presente.
-        
-        DADOS:
-        - Custos Fixos: R$ ${safeToFixed(fixedCosts)}
-        - Custos Variáveis: R$ ${safeToFixed(varCosts)}
-        - Estimativa de Compras Atuais: R$ ${safeToFixed(groceryTotal)}
-        - Total Geral: R$ ${safeToFixed((fixedCosts ?? 0) + (varCosts ?? 0) + (groceryTotal ?? 0))}
-        - Lançamentos detalhados: ${details}
-        
-        OBJETIVO:
-        Forneça uma análise crítica em português estruturada em Markdown.
-        1. Resumo da situação.
-        2. Top 3 áreas para redução de custos imediatos.
-        3. Dicas específicas para economizar usando os preços dos supermercados BH, EPA e Apoio Mineiro.
-        4. Meta de economia sugerida.` }]} ],
-        generationConfig: { systemInstruction: "Seja prático e motivador." } as any
+      const response = await fetch('/api/ai/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          fixedCosts: safeToFixed(fixedCosts), 
+          varCosts: safeToFixed(varCosts), 
+          groceryTotal: safeToFixed(groceryTotal),
+          total: safeToFixed((fixedCosts ?? 0) + (varCosts ?? 0) + (groceryTotal ?? 0)),
+          details 
+        })
       });
-      setAiReport(response.response.text());
+      
+      const resData = await response.json();
+      setAiReport(resData.report);
     } catch (e) {
       console.error(e);
       setAiReport("Erro ao gerar análise I.A. Verifique sua conexão.");
     } finally {
+
       setIsGeneratingReport(false);
     }
   };
@@ -1130,13 +1124,7 @@ export default function App() {
     }
   };
 
-  // Initialize Gemini
-  const ai = useMemo(() => {
-    // Busca priorizando VITE_GEMINI_API_KEY do build e tenta remover espaços extras
-    const key = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
-    if (!key) console.warn("⚠️ VITE_GEMINI_API_KEY não encontrada no build.");
-    return new GoogleGenerativeAI(key || 'DUMMY_KEY'); 
-  }, []);
+
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -1253,37 +1241,23 @@ export default function App() {
     if (!user || !selectedResidenceId || items.length === 0) return;
     setIsAnalyzing(true);
     
-    // Mostremos um feedback claro de que pode demorar
-    alert("O Radar de Inteligência Artificial está cotando o preço total do seu carrinho nos maiores hipermercados mais perto de você agora!");
+    // Feedback claro
+    alert("O Radar de Inteligência Artificial está cotando o preço total do seu carrinho nos hipermercados da sua região agora!");
 
     try {
-      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const response = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: `Você é um avaliador de supermercados. Localização do usuário: ${locationName}. 
-        Mercados atuais sendo analisados: ${stores.map(s => s.name).join(', ')}.
-        Para a seguinte lista de produtos:
-        ${items.map(i => `- ${i.quantity} ${i.unit} de ${i.name}`).join('\n')}
-        
-        Estime o preço atual (realista, em BRL, na última semana) do valor unitário de cada um desses produtos em cada um desses supermercados locais.
-        Retorne exatamente um JSON neste formato:
-        {
-          "items": [
-            {
-               "itemName": "nome exato do item conforme listado",
-               "prices": {
-                  "Nome Exato do Mercado 1": 15.99,
-                  "Nome Exato do Mercado 2": 16.50
-               }
-            }
-          ]
-        }` }] }],
-        generationConfig: { responseMimeType: "application/json" }
+      const response = await fetch('/api/ai/refresh-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          location: locationName, 
+          stores: stores.map(s => s.name),
+          items: items.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+        })
       });
-
-      const data = JSON.parse(response.response.text() || '{}');
+      
+      const data = await response.json();
       if (data.items) {
         const updatedItems = items.map(item => {
-          // Busca case insensitive
           const match = data.items.find((resItem: any) => 
              resItem.itemName.toLowerCase() === item.name.toLowerCase()
           );
@@ -1297,11 +1271,12 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      alert(`Erro na cotação: ${err instanceof Error ? err.message : 'Falha na conexão com a nuvem'}`);
+      alert(`Erro na cotação: ${err instanceof Error ? err.message : 'Falha na conexão'}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
+
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'shopping' | 'stock' | 'prices' = 'shopping') => {
     const file = e.target.files?.[0];
@@ -1319,74 +1294,22 @@ export default function App() {
         reader.readAsDataURL(file);
       });
 
-      const promptMap = {
-        shopping: `Analise esta imagem (nota fiscal, panfleto ou propaganda) e extraia uma lista de itens de mercado. 
-            Para cada item, identifique o NOME PADRONIZADO (ex: "Leite Integral 1L" em vez de "LEITE UHT"), a categoria mais próxima entre (${DEFAULT_CATEGORIES.join(', ')}) 
-            e o preço encontrado na imagem. Estime para as lojas reais: ${stores.map(s => s.name).join(', ')}.
-            Retorne uma lista JSON de objetos com: name, category, prices (objeto com os nomes das lojas).`,
-        stock: `Analise este CUPOM FISCAL e extraia os itens comprados. 
-            Para cada item, identifique o NOME PADRONIZADO de mercado (ex: "Arroz Agulhinha 5kg", "Detergente Líquido 500ml").
-            Identifique a QUANTIDADE comprada e o VALOR PAGO.
-            O objetivo é REPOR O ESTOQUE. 
-            Retorne um JSON: { items: [{ name: string, quantity: number, price: number }] }.`,
-        prices: `Analise este CUPOM FISCAL ou PANFLETO e extraia apenas os PREÇOS atuais.
-            Use NOMES PADRONIZADOS de mercado.
-            Identifique o mercado emissor se possível ou use o preço para atualizar a base de dados.
-            Retorne um JSON: { items: [{ name: string, price: number }] }.`
-      };
-
-      const model = ai.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: mode === 'shopping' ? {
-            type: SchemaType.ARRAY,
-            items: {
-              type: SchemaType.OBJECT,
-              properties: {
-                name: { type: SchemaType.STRING },
-                category: { type: SchemaType.STRING },
-                prices: {
-                  type: SchemaType.OBJECT,
-                  properties: stores.reduce((acc, s) => ({ ...acc, [s.name]: { type: SchemaType.NUMBER } }), {})
-                }
-              }
-            }
-          } : {
-            type: SchemaType.OBJECT,
-            properties: {
-              items: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    name: { type: SchemaType.STRING },
-                    quantity: { type: SchemaType.NUMBER },
-                    price: { type: SchemaType.NUMBER }
-                  }
-                }
-              }
-            }
-          }
-        }
+      const response = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          mode, 
+          base64: base64Data, 
+          mime: file.type, 
+          stores: stores.map(s => s.name) 
+        })
       });
 
-      const response = await model.generateContent([
-        {
-          text: promptMap[mode]
-        },
-        {
-          inlineData: {
-            mimeType: file.type,
-            data: base64Data
-          }
-        }
-      ]);
-
-      const data = JSON.parse(response.response.text() || (mode === 'shopping' ? '[]' : '{"items":[]}'));
-
+      
+      const resData = await response.json();
+      
       if (mode === 'shopping') {
-        const processedItems: GroceryItem[] = data.map((raw: any) => ({
+        const processedItems: GroceryItem[] = (resData.items || resData).map((raw: any) => ({
           id: Math.random().toString(36).substr(2, 9),
           name: raw.name || "Item sem nome",
           quantity: raw.quantity || 1,
@@ -1396,61 +1319,18 @@ export default function App() {
           checked: false
         }));
         setItems(prev => [...prev, ...processedItems]);
-      } else if (mode === 'stock') {
-        // Update Inventory in Firestore
-        for (const item of data.items) {
+      } else {
+        const itemsToUpdate = resData.items || resData || [];
+        for (const item of itemsToUpdate) {
           const matchedItem = inventory.find(i => i.name.toLowerCase() === item.name.toLowerCase());
-          if (matchedItem && selectedResidenceId) {
+          if (matchedItem && selectedResidenceId && mode === 'stock') {
             await updateDoc(doc(db, `residences/${selectedResidenceId}/inventory`, matchedItem.id), {
               current: matchedItem.current + (item.quantity || 1)
             });
-          } else if (selectedResidenceId) {
-            await addDoc(collection(db, `residences/${selectedResidenceId}/inventory`), {
-              name: item.name,
-              current: item.quantity || 1,
-              min: 1,
-              unit: 'un'
-            });
           }
         }
-
-        // Update list prices in Firestore
-        for (const listName of Object.keys(lists)) {
-          const updatedItems = lists[listName].map(li => {
-            const matchedUpdate = data.items.find((u: any) => u.name.toLowerCase() === li.name.toLowerCase());
-            if (matchedUpdate) {
-              return {
-                ...li,
-                prices: { ...li.prices, [selectedStore]: matchedUpdate.price }
-              };
-            }
-            return li;
-          });
-          
-          if (JSON.stringify(updatedItems) !== JSON.stringify(lists[listName]) && selectedResidenceId) {
-            await setDoc(doc(db, `residences/${selectedResidenceId}/lists`, listName), {
-              items: updatedItems,
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
-      } else if (mode === 'prices') {
-        // Update prices globally in Firestore
-        for (const listName of Object.keys(lists)) {
-          const updatedItems = lists[listName].map(li => {
-            const matchedUpdate = data.items.find((u: any) => u.name.toLowerCase() === li.name.toLowerCase());
-            if (matchedUpdate) {
-              return {
-                ...li,
-                prices: { ...li.prices, [selectedStore]: matchedUpdate.price }
-              };
-            }
-            return li;
-          });
-
-          if (JSON.stringify(updatedItems) !== JSON.stringify(lists[listName]) && selectedResidenceId) {
-            await setDoc(doc(db, `residences/${selectedResidenceId}/lists`, listName), {
-              items: updatedItems,
+      }
+items: updatedItems,
               updatedAt: serverTimestamp()
             });
           }
