@@ -39,21 +39,26 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     if (text) promptParts.push(`Mensagem de ${userFirstName || 'usuário'}: ${text}`);
     
     if (audioBase64) {
-      promptParts.push({ inlineData: { data: audioBase64, mimeType: audioMime } });
-      promptParts.push("Analise o áudio acima.");
+      // Limpa mimetype que pode vir com codecs (ex: audio/ogg; codecs=opus)
+      const cleanMime = audioMime.split(';')[0];
+      promptParts.push({ inlineData: { data: audioBase64, mimeType: cleanMime } });
+      promptParts.push("IMPORTANTE: O usuário enviou um áudio. Transcreva o áudio acima e aplique as REGRAS DE OURO para extrair os itens.");
     }
 
     if (imageBase64) {
-      promptParts.push({ inlineData: { data: imageBase64, mimeType: imageMime } });
-      promptParts.push("Analise a imagem acima e extraia itens de mercado.");
+      const cleanMime = imageMime.split(';')[0];
+      promptParts.push({ inlineData: { data: imageBase64, mimeType: cleanMime } });
+      promptParts.push("Analise a imagem acima e extraia itens de mercado seguindo o formato JSON solicitado.");
     }
 
     const result = await model.generateContent(promptParts);
     const responseText = result.response.text();
     
-    // Limpeza de Markdown se necessário
-    const jsonStr = responseText.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(jsonStr);
+    // Limpeza agressiva de JSON (remove inclusive texto fora do bloco json)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : responseText;
+    const parsed = JSON.parse(jsonStr.replace(/```json|```/g, '').trim());
+
     
     return {
       actions: parsed.actions || [],
