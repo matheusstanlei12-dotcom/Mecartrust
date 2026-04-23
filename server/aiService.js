@@ -32,8 +32,10 @@ async function safeGenerate(promptParts) {
 
   for (const modelName of modelsToTry) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
+      // Forçamos v1 para evitar o erro de 404 na v1beta que o Google está disparando
+      const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
       const result = await model.generateContent(promptParts);
+
       if (result) {
         const text = result.response.text();
         const jsonMatch = text.match(/\{[\s\S]*\}/);
