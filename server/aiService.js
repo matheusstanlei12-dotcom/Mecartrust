@@ -32,7 +32,9 @@ Sua resposta deve ser EXCLUSIVAMENTE um JSON:
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
     // 1. IA para todos os casos - garante inteligência e evita erros de regex simples
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+
+
 
     const promptParts = [SYSTEM_PROMPT];
 
