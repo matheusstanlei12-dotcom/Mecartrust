@@ -2419,7 +2419,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Grocery List Scroll Area */}
+{/* Grocery List Scroll Area */}
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
                 {items.length === 0 ? (
                   <div className="text-center py-24 flex flex-col items-center opacity-40">
@@ -2430,57 +2430,114 @@ export default function App() {
                     <p className="text-xs text-[#6B705C] mt-1">Sua lista aparecerá aqui.</p>
                   </div>
                 ) : (
-                  DEFAULT_CATEGORIES.map(category => {
-                  const categoryItems = items.filter(i => i.category === category);
-                  if (categoryItems.length === 0) return null;
+                  <>
+                    {DEFAULT_CATEGORIES.map(category => {
+                      const categoryItems = items.filter(i => i.category === category);
+                      if (categoryItems.length === 0) return null;
 
-                  return (
-                    <div key={`category-${category}-${activeList}`} className="mb-8 last:mb-0">
-                      <div className="flex items-center gap-2 mb-4">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6B705C] whitespace-nowrap">{category}</h3>
-                        <div className="h-px bg-border-main flex-1 opacity-50"></div>
-                      </div>
-                      <div className="space-y-px">
-                          {categoryItems.map((item, idx) => (
-                            <div 
-                              key={`${item.id}-${idx}-${activeList}`}
-                              className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
-                            >
-                              <button 
-                                onClick={() => toggleCheck(item.id)}
-                                className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                  item.checked 
-                                  ? 'bg-primary border-primary text-white rotate-6 scale-110 shadow-sm' 
-                                  : 'border-primary/30 hover:border-primary hover:bg-primary/5'
-                                }`}
+                      return (
+                        <div key={`category-${category}-${activeList}`} className="mb-8 last:mb-0">
+                          <div className="flex items-center gap-2 mb-4">
+                            <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6B705C] whitespace-nowrap">{category}</h3>
+                            <div className="h-px bg-border-main flex-1 opacity-50"></div>
+                          </div>
+                          <div className="space-y-px">
+                            {categoryItems.map((item, idx) => (
+                              <div 
+                                key={`${item.id}-${idx}-${activeList}`}
+                                className={`grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all ${item.checked ? 'bg-[#F9F9F9]/50' : ''}`}
                               >
-                                {item.checked && <CheckCircle2 size={12} />}
-                              </button>
-                              <div>
-                                <p className={`font-bold text-sm ${item.checked ? 'text-[#D1D1D1] line-through' : 'text-text-main'}`}>{item.name}</p>
-                                <p className="text-[9px] font-black uppercase tracking-tighter text-[#6B705C]/60">Gemini AI Check</p>
-                              </div>
-                              <div className="text-[10px] text-[#6B705C] font-black uppercase">{item.quantity} {item.unit}</div>
-                              <div className="flex items-center justify-end gap-3 px-1">
-                                <span className={`text-sm font-black ${item.checked ? 'text-[#D1D1D1]' : 'text-primary'}`}>
-                                  {((item?.prices?.[selectedStore] ?? 0) > 0) 
-                                    ? `R$ ${safeToFixed((item.prices[selectedStore] || 0) * (item.quantity || 1))}`
-                                    : 'Calculando...'}
-                                </span>
                                 <button 
-                                  onClick={() => removeItem(item.id)}
-                                  className="text-error opacity-0 group-hover:opacity-100 hover:scale-110 transition-all p-1"
+                                  onClick={() => toggleCheck(item.id)}
+                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-secondary border-secondary text-white' : 'border-border-main hover:border-primary/40'}`}
                                 >
-                                  <Trash2 size={16} />
+                                  {item.checked && <Check size={14} strokeWidth={4} />}
                                 </button>
+                                
+                                <div className="flex flex-col">
+                                  <span className={`text-[13px] font-bold ${item.checked ? 'line-through text-[#9E9E9E]' : 'text-[#333]'}`}>
+                                    {item.name}
+                                  </span>
+                                  <span className="text-[9px] text-[#9E9E9E] font-medium uppercase tracking-tight">{(item.category || 'Geral')}</span>
+                                </div>
+
+                                <div className="text-center bg-[#f8f9fa] py-1 px-2 rounded-lg border border-border-main/50">
+                                  <span className="text-[11px] font-black text-primary">
+                                    {item.quantity} {item.unit || 'un'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-1 group/price">
+                                  <div className="text-right">
+                                    <p className="text-[11px] font-black text-primary">R$ {safeToFixed(item.prices?.[selectedStore || 'BH'] || 0)}</p>
+                                    <p className="text-[8px] text-[#9E9E9E] font-medium truncate max-w-[70px] uppercase">{(selectedStore || 'BH').split(' ')[0]}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => deleteItem(item.id)}
+                                    className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-error/10 text-error rounded-lg transition-all"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+
+                    {/* Fallback para itens sem categoria correspondente */}
+                    {(() => {
+                      const otherItems = items.filter(i => !DEFAULT_CATEGORIES.includes(i.category || ''));
+                      if (otherItems.length === 0) return null;
+
+                      return (
+                        <div key={`category-other-${activeList}`} className="mb-8 last:mb-0">
+                          <div className="flex items-center gap-2 mb-4">
+                            <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#E5383B] whitespace-nowrap">Pendentes / Não Categorizados</h3>
+                            <div className="h-px bg-error/20 flex-1 opacity-50"></div>
+                          </div>
+                          <div className="space-y-px">
+                            {otherItems.map((item, idx) => (
+                              <div 
+                                key={`other-${item.id}-${idx}-${activeList}`}
+                                className="grid grid-cols-[40px_1fr_80px_100px] items-center py-3.5 border-b border-border-main/40 last:border-0 group transition-all"
+                              >
+                                <button 
+                                  onClick={() => toggleCheck(item.id)}
+                                  className="w-6 h-6 rounded-lg border-2 border-border-main flex items-center justify-center transition-all"
+                                >
+                                  {item.checked && <Check size={14} strokeWidth={4} />}
+                                </button>
+                                
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-bold text-[#333]">{item.name}</span>
+                                  <span className="text-[9px] text-[#E5383B] font-black uppercase tracking-tight">{item.category || 'Sem Categoria'}</span>
+                                </div>
+
+                                <div className="text-center bg-error/5 py-1 px-2 rounded-lg border border-error/10">
+                                  <span className="text-[11px] font-black text-error">
+                                    {item.quantity} {item.unit || 'un'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-1">
+                                  <button 
+                                    onClick={() => deleteItem(item.id)}
+                                    className="p-1.5 hover:bg-error/10 text-error rounded-lg"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
+}
               </div>
 
               {/* Action Footer */}

@@ -167,7 +167,8 @@ export async function processInventoryActions(phone, actions, choice = null) {
     const type = String(action.type || 'add').toLowerCase();
     const item = String(action.item || '').trim();
     const qty = Number(action.quantity) || 1;
-    const category = action.category || 'Despensa';
+    const category = action.category || 'Mercearia/Despensa';
+
 
     if (!item) continue;
 
