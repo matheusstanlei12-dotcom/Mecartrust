@@ -92,17 +92,20 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     };
   } catch (e) {
     console.error('❌ IA Error (Acionando Fallback):', e.message);
-    // Se for texto, tenta o fallback manual
+    // Erro amigável para o usuário
+    const friendlyError = "Poxa, não consegui processar seu áudio ou imagem agora (o Google está com instabilidade de voz). 📝 *Pode escrever o que você precisa? Estou pronto para anotar!*";
+    
     if (text) {
       return emergencyRegexFallback(text);
     }
     return { 
       actions: [], 
       needsConfirmation: false,
-      reply: `Desculpe, tive um tropeço técnico crítico: ${e.message}.` 
+      reply: friendlyError 
     };
   }
 }
+
 
 
 export async function analyzeItemAI(itemText, location, stores) {
