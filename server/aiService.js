@@ -28,34 +28,39 @@ Retorne EXCLUSIVAMENTE um JSON:
 
 async function safeGenerate(promptParts) {
   const start = Date.now();
-  const keySnippet = (GEMINI_KEY || '').substring(0, 5);
-  console.log(`[IA Trace] Iniciando safeGenerate. Key: ${keySnippet}...`);
+  console.log(`[IA Trace] Iniciando safeGenerate...`);
 
-  return new Promise(async (resolve, reject) => {
-    const timeout = setTimeout(() => {
-      console.error(`[IA Trace] TIMEOUT atingido após ${Date.now() - start}ms`);
-      reject(new Error("A IA demorou muito para responder (Timeout)"));
-    }, 20000);
-
-    try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      console.log(`[IA Trace] Enviando prompt para Gemini...`);
-      const result = await model.generateContent(promptParts);
-      clearTimeout(timeout);
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+    const result = await model.generateContent(promptParts);
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+  } catch (err) {
+    console.error(`[IA Trace] Falha na primeira tentativa:`, err.message);
+    
+    // Se falhou e tinha áudio/imagem, tenta APENAS TEXTO como última esperança
+    if (promptParts.some(p => typeof p !== 'string')) {
+      console.warn("[IA Trace] Retentando APENAS TEXTO...");
+      const textOnly = promptParts.filter(p => typeof p === 'string');
+      textOnly.push("AVISO: O áudio/imagem falhou. Ignore o áudio e responda apenas ao texto se houver.");
       
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+      const result = await model.generateContent(textOnly);
       const text = result.response.text();
-      console.log(`[IA Trace] Resposta recebida (${Date.now() - start}ms).`);
-      
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
-      resolve(parsed);
-    } catch (err) {
-      clearTimeout(timeout);
-      console.error(`[IA Trace] Erro na geração:`, err.message);
-      reject(err);
+      
+      // Adiciona aviso no reply para o usuário saber que o áudio falhou
+      if (parsed.reply) {
+        parsed.reply = "⚠️ (Não consegui ouvir o áudio, processando apenas texto): " + parsed.reply;
+      }
+      return parsed;
     }
-  });
+    throw err;
+  }
 }
+
 
 
 
