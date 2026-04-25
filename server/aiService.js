@@ -28,22 +28,44 @@ Retorne EXCLUSIVAMENTE um JSON:
 
 async function safeGenerate(promptParts) {
   const start = Date.now();
-  console.log(`[IA Trace] Iniciando safeGenerate (MODO PRO)...`);
+  console.log(`[IA Trace] Iniciando safeGenerate (2.0 Optimized)...`);
 
-  try {
-    // Tira qualquer conteúdo binário do prompt pois o gemini-pro (1.0) não aceita
+  const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+  let lastError = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`[IA Trace] Tentando modelo: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(promptParts);
+      const text = result.response.text();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+    } catch (err) {
+      lastError = err;
+      console.warn(`⚠️ Falha com ${modelName}:`, err.message);
+      
+      // Se for erro de multimodalidade (áudio/imagem), o loop continua tentando
+      // Se for erro de cotação ou outro, também tenta o próximo
+    }
+  }
+
+  // Se tudo falhou e tinha multimodalidade, tenta apenas o texto do prompt
+  if (promptParts.some(p => typeof p !== 'string')) {
+    console.warn("[IA Trace] Falha total multimodal. Retentando APENAS TEXTO...");
     const textOnly = promptParts.filter(p => typeof p === 'string');
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(textOnly);
     const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
-  } catch (err) {
-    console.error(`[IA Trace] Falha no gemini-pro:`, err.message);
-    throw err;
+    const parsed = JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
+    if (parsed.reply) parsed.reply = "⚠️ (Áudio ignorado por instabilidade): " + parsed.reply;
+    return parsed;
   }
+
+  throw lastError || new Error("Falha total na IA");
 }
+
 
 
 
