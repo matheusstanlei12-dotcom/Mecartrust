@@ -260,7 +260,8 @@ async function sendWelcomeMessage(docId, user) {
   const rawPhone = String(user.phone).replace(/\D/g, '');
   const fullPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
 
-  const welcomeText = `✨ *OLÁ, ${userName.toUpperCase()}!* ✨\n\nQue honra ter você no *Lar 360*! 🏠\n\nA partir de agora, eu serei sua dupla dinâmica na organização da sua casa. Esqueça papel e caneta! 📝✂️\n\n🔹 *O QUE VOCÊ PODE FAZER COMIGO?*\n\n🛒 *Listas Rápidas*: Só me diga "Adicione café e pão" ou mande um *áudio*!\n📦 *Controle de Estoque*: "Comprei 3 leites" ou "Acabou o arroz".\n📸 *Visão Inteligente*: Mande uma foto do seu *cupom fiscal* ou da sua despensa e eu faço o trabalho duro de ler tudo para você!\n\nEstou pronto para organizar sua vida. O que vamos planejar hoje? 🚀😉`;
+  const welcomeText = `🏠 *BEM-VINDO AO LAR 360!* 🏠\n\nOlá, *${userName.toUpperCase()}*! É um grande prazer ter você aqui. A partir de agora, a gestão da sua casa entrou em um novo nível de inteligência. 🚀\n\nEu sou seu *Assistente Pessoal* e estou aqui para facilitar sua rotina:\n\n🎧 *Mande Áudios*: Pode falar naturalmente o que precisa adicionar ou remover.\n📝 *Comandos de Texto*: "Adicione 2 arroz" ou "Apague o café".\n📸 *Visão Inteligente*: Mande fotos de cupons fiscais ou da sua geladeira e eu organizo tudo!\n💰 *Radar de Preços*: Descubra agora qual supermercado perto de você está mais barato!\n\n*COMO COMEÇAR?*\nBasta me mandar uma mensagem do que você quer fazer agora! Vamos organizar sua casa? ✨`;
+
 
   try {
     setTimeout(async () => {

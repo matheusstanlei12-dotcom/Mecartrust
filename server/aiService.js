@@ -83,8 +83,9 @@ function emergencyRegexFallback(text) {
   return {
     actions: action.item ? [action] : [],
     needsConfirmation: true,
-    reply: action.item ? `(Modo de Emergência) Entendi: ${verb} ${action.quantity}x ${action.item}.` : "Não entendi o comando, mas estou ouvindo."
+    reply: action.item ? `Entendi: ${verb} ${action.quantity}x ${action.item}.` : "Não entendi o comando, mas estou ouvindo."
   };
+
 }
 
 
