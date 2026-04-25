@@ -28,43 +28,42 @@ Retorne EXCLUSIVAMENTE um JSON:
 
 async function safeGenerate(promptParts) {
   const start = Date.now();
-  console.log(`[IA Trace] Iniciando safeGenerate (2.0 Optimized)...`);
+  console.log(`[IA Trace] Iniciando safeGenerate (Stable Route)...`);
 
-  const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+  const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest"];
   let lastError = null;
 
   for (const modelName of modelsToTry) {
     try {
-      console.log(`[IA Trace] Tentando modelo: ${modelName}`);
-      const model = genAI.getGenerativeModel({ model: modelName });
+      console.log(`[IA Trace] Tentando porta estável com: ${modelName}`);
+      // Forçamos v1 explicitly para evitar o loop de 404 da v1beta
+      const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
       const result = await model.generateContent(promptParts);
       const text = result.response.text();
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       return JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
     } catch (err) {
       lastError = err;
-      console.warn(`⚠️ Falha com ${modelName}:`, err.message);
-      
-      // Se for erro de multimodalidade (áudio/imagem), o loop continua tentando
-      // Se for erro de cotação ou outro, também tenta o próximo
+      console.warn(`⚠️ Erro na porta estável com ${modelName}:`, err.message);
     }
   }
 
-  // Se tudo falhou e tinha multimodalidade, tenta apenas o texto do prompt
+  // Fallback total se mesmo a v1 falhar com multimodal
   if (promptParts.some(p => typeof p !== 'string')) {
-    console.warn("[IA Trace] Falha total multimodal. Retentando APENAS TEXTO...");
+    console.warn("[IA Trace] Falha total estável multimodal. Retentando APENAS TEXTO...");
     const textOnly = promptParts.filter(p => typeof p === 'string');
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
     const result = await model.generateContent(textOnly);
     const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse((jsonMatch ? jsonMatch[0] : text).replace(/```json|```/g, '').trim());
-    if (parsed.reply) parsed.reply = "⚠️ (Áudio ignorado por instabilidade): " + parsed.reply;
+    if (parsed.reply) parsed.reply = "⚠️ (Áudio bloqueado pelo Google, lendo apenas texto): " + parsed.reply;
     return parsed;
   }
 
-  throw lastError || new Error("Falha total na IA");
+  throw lastError || new Error("Falha total na IA Estável");
 }
+
 
 
 
@@ -115,9 +114,10 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
   } catch (e) {
     console.error('❌ IA Error (Acionando Fallback):', e.message);
     
-    // Mostra o erro técnico curto para diagnóstico
-    const techError = e.message.substring(0, 100);
-    const friendlyError = `Poxa, o Google não deixou eu ouvir esse áudio agora. 📝 *Pode escrever o que você precisa?* \n\n(Erro: ${techError})`;
+    // Mostra o erro técnico longo para diagnóstico real
+    const techError = e.message.substring(0, 300);
+    const friendlyError = `Poxa, o Google não deixou eu ouvir esse áudio agora. 📝 *Pode escrever o que você precisa?* \n\n(Dica: mande áudios de +6 segundos)\n\n(Erro: ${techError})`;
+
     
     if (text) {
       return emergencyRegexFallback(text);
