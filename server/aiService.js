@@ -114,8 +114,10 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     };
   } catch (e) {
     console.error('❌ IA Error (Acionando Fallback):', e.message);
-    // Erro amigável para o usuário
-    const friendlyError = "Poxa, não consegui processar seu áudio ou imagem agora (o Google está com instabilidade de voz). 📝 *Pode escrever o que você precisa? Estou pronto para anotar!*";
+    
+    // Mostra o erro técnico curto para diagnóstico
+    const techError = e.message.substring(0, 100);
+    const friendlyError = `Poxa, o Google não deixou eu ouvir esse áudio agora. 📝 *Pode escrever o que você precisa?* \n\n(Erro: ${techError})`;
     
     if (text) {
       return emergencyRegexFallback(text);
@@ -127,6 +129,7 @@ export async function processInventoryMessage(text, audioBase64 = null, audioMim
     };
   }
 }
+
 
 
 
