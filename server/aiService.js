@@ -43,25 +43,50 @@ async function safeGenerate(promptParts) {
 
 function emergencyRegexFallback(text) {
   console.log("[IA Fallback] Ativando Motor de Emergência (Regex)...");
-  const clean = String(text).toLowerCase().trim();
+  const clean = String(text).toLowerCase().trim()
+    .replace(/[?!.]/g, '') // Remove pontuações
+    .replace(/(?:por favor|obrigado|gentileza)/g, '').trim();
+
   let action = { type: 'add', target: 'list', item: '', quantity: 1, unit: 'un', category: 'Outros' };
   
-  // Regex simples para capturar item e quantidade
-  const addMatch = clean.match(/(?:adicione|coloca|poe|quero|pega|compra)\s+(?:(\d+)\s+)?(.*)/);
-  if (addMatch) {
-    action.quantity = parseInt(addMatch[1]) || 1;
-    action.item = addMatch[2].trim();
+  // Detecta intenção de REMOVER
+  if (clean.match(/(?:apague|remova|tira|delete|exclua|remove)/)) {
+    action.type = 'remove';
+    const itemMatch = clean.match(/(?:apague|remova|tira|delete|exclua|remove)\s+(?:(\d+)\s+)?(.*)/);
+    if (itemMatch) {
+      action.quantity = parseInt(itemMatch[1]) || 1;
+      action.item = itemMatch[2].trim();
+    }
   } else {
-    // Se não bateu regex, assume que o texto todo é o item
-    action.item = clean;
+    // Detecta intenção de ADICIONAR
+    action.type = 'add';
+    const addMatch = clean.match(/(?:adicione|coloca|poe|quero|pega|compra)\s+(?:(\d+)\s+)?(.*)/);
+    if (addMatch) {
+      action.quantity = parseInt(addMatch[1]) || 1;
+      action.item = addMatch[2].trim();
+    } else {
+      action.item = clean;
+    }
   }
+
+  // LIMPEZA FINAL DO ITEM (Remove sufixos comuns que poluem a lista)
+  if (action.item) {
+    action.item = action.item
+      .replace(/(?:à minha lista|na minha lista|no meu estoque|do estoque|da lista|no carrinho)/g, '')
+      .replace(/(?:de|do|da)\s*$/g, '') // Remove preposições soltas no fim
+      .trim();
+  }
+
+  const emoji = action.type === 'add' ? '📦' : '🗑️';
+  const verb = action.type === 'add' ? 'Adicionar' : 'Remover';
 
   return {
     actions: action.item ? [action] : [],
     needsConfirmation: true,
-    reply: action.item ? `(Modo de Emergência) Entendi: ${action.quantity}x ${action.item}.` : "Não entendi o item, mas estou em modo de emergência."
+    reply: action.item ? `(Modo de Emergência) Entendi: ${verb} ${action.quantity}x ${action.item}.` : "Não entendi o comando, mas estou ouvindo."
   };
 }
+
 
 export async function processInventoryMessage(text, audioBase64 = null, audioMime = null, userFirstName = null, imageBase64 = null, imageMime = null) {
   try {
